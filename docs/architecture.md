@@ -25,6 +25,15 @@ Suggested internal modules:
 - `aar/` — replay/AAR generation
 - `config/` — loading/validation of runtime configuration
 
+Current committed anchor points:
+- shared protocol schema: `common/include/icss/protocol/messages.hpp`
+- simulation API: `common/include/icss/core/simulation.hpp`
+- simulation runtime: `common/src/simulation.cpp`
+- ASCII tactical viewer renderer: `common/src/ascii_tactical_view.cpp`
+- server baseline entrypoint: `server/src/main.cpp`
+- command console baseline entrypoint: `clients/command-console/src/main.cpp`
+- tactical viewer baseline entrypoint: `clients/tactical-viewer/src/main.cpp`
+
 ### 2. Command Console Client
 Responsibilities:
 - create session / join session

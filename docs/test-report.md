@@ -1,8 +1,50 @@
-# Test Report Template
+# Test Report
 
 ## Verification Goal
 
 Prove that the portfolio demonstrates the intended server/system software qualities, not just a scripted happy path.
+
+## Canonical Commands
+
+### Configure
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+```
+
+### Build
+
+```bash
+cmake --build build
+```
+
+### Test
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+## Current Verification Scope
+
+At the current stage, verification proves:
+- the CMake project configures successfully
+- the baseline executables build successfully
+- the shared protocol schema compiles and passes smoke checks
+- the baseline scenario flow passes end-to-end regression
+- invalid command ordering is rejected and logged
+- resilience/replay rendering behavior passes smoke verification
+
+## Latest Verified Result
+
+- configure: passed
+- build: passed
+- test: passed (`4/4` tests)
+- runtime smoke: passed (`icss_server`, `icss_command_console`, `icss_tactical_viewer`)
+- verified targets:
+  - `protocol_smoke`
+  - `scenario_flow`
+  - `validation_rejects_invalid_flow`
+  - `resilience_smoke`
 
 ## Acceptance Checks
 
@@ -37,9 +79,9 @@ Prove that the portfolio demonstrates the intended server/system software qualit
 
 ## Evidence Links
 
-Fill in later:
-- demo video:
-- sample AAR:
-- logs:
-- screenshots:
-- protocol doc:
+- demo video: pending
+- sample AAR: `assets/sample-aar/session-summary.md`
+- logs: pending
+- screenshots: pending
+- protocol doc: `docs/protocol.md`
+- concrete build/test commands: see canonical commands above

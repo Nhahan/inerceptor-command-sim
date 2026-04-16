@@ -4,6 +4,15 @@
 
 Keep the protocol small, explainable, and aligned with the portfolio's message: **reliable command handling + timely state propagation**.
 
+## Canonical Schema Source
+
+The committed source of truth for the baseline message schema is:
+
+- `common/include/icss/protocol/messages.hpp`
+
+Use this document as the explanation layer and the header as the implementation anchor.
+If they diverge, fix both in the same change.
+
 ## Transport Split
 
 | Transport | Use | Why |
@@ -11,27 +20,58 @@ Keep the protocol small, explainable, and aligned with the portfolio's message: 
 | TCP | session control, command submission, acknowledgements, critical judgment events | reliability and ordering matter |
 | UDP | state snapshots, telemetry, non-critical frequent updates | freshness matters more than per-packet reliability |
 
-## TCP Message Families
+## TCP Message Kinds (`TcpMessageKind`)
 
-- session create/join/leave
-- scenario start/stop
-- track request
-- asset activation
-- command issue
-- command validation result / acknowledgement
-- critical judgment event
-- replay/AAR request
+| Kind | Purpose |
+|---|---|
+| `session_create` | create a session |
+| `session_join` | join an existing session |
+| `session_leave` | leave session / operator disconnect flow |
+| `scenario_start` | start the representative scenario |
+| `scenario_stop` | stop or finalize scenario execution |
+| `track_request` | request target tracking |
+| `asset_activate` | activate or ready an asset |
+| `command_issue` | submit a command for validation/judgment |
+| `command_ack` | acknowledge accepted or processed command flow |
+| `judgment_event` | emit critical server-side judgment result |
+| `aar_request` | request replay/AAR output |
 
-## UDP Message Families
+## UDP Message Kinds (`UdpMessageKind`)
 
-- periodic world snapshot
-- target/asset state summary
-- tracking status summary
-- telemetry
-  - tick
-  - latency
-  - packet loss estimate
-  - last snapshot timestamp
+| Kind | Purpose |
+|---|---|
+| `world_snapshot` | periodic world snapshot |
+| `entity_state` | target/asset state summary |
+| `tracking_summary` | tracking-specific state summary |
+| `telemetry` | tick/latency/packet-loss/last-snapshot telemetry |
+
+## Event Types (`EventType`)
+
+Committed baseline event categories:
+- `session_started`
+- `session_ended`
+- `client_joined`
+- `client_left`
+- `client_reconnected`
+- `track_updated`
+- `asset_updated`
+- `command_accepted`
+- `command_rejected`
+- `judgment_produced`
+- `resilience_triggered`
+
+## Baseline Shared Structures
+
+Committed baseline headers/records:
+- `SessionEnvelope`
+- `SnapshotHeader`
+- `TelemetrySample`
+- `EventRecordHeader`
+
+## Baseline Validation Behavior
+
+The authoritative runtime now records rejected command attempts as `command_rejected` events.
+This matters because command validation is part of the portfolio story, not just a UI concern.
 
 ## Baseline Reliability Strategy
 

@@ -2,12 +2,12 @@
 
 ## One-Sentence Positioning
 
-I built a C++ server-authoritative real-time simulation/control system to show real-time networking, multi-client state propagation, resilience handling, and replayable AAR evidence in a battlefield-system style portfolio.
+I built a C++ server-authoritative simulation/control baseline to show protocol-defined transport separation, multi-client state propagation, resilience handling, and replayable AAR evidence in a battlefield-system style portfolio.
 
 ## What This Portfolio Is Trying to Prove
 
 1. I can design a C++ real-time server/system, not just a toy game feature.
-2. I understand why command reliability and state freshness need different transport strategies.
+2. I understand why command reliability and state freshness need different transport strategies, even though the current baseline models those roles in-process rather than through live sockets.
 3. I think about operability, traceability, and post-run analysis.
 
 ## Questions I Must Be Ready For

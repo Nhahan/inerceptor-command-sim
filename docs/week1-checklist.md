@@ -4,8 +4,13 @@
 
 Lock the architecture, protocol categories, scenario flow, and tactical viewer contract before deeper implementation.
 
+## Current Assumption
+
+The repository scaffold and minimal CMake/C++ skeleton now exist.
+This checklist is for **locking implementation decisions on top of the committed skeleton**, not for re-scaffolding the repo from scratch.
+
 ## Day 1
-- [ ] create final repo scaffold
+- [ ] review the committed scaffold and confirm it still matches the frozen PRD
 - [ ] freeze top-level module boundaries
 - [ ] name key runtime/config artifacts
 

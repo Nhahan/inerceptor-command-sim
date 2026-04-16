@@ -1,6 +1,6 @@
 # Interceptor Command Simulation System
 
-> C++ real-time simulation server with multi-client command/control, UDP/TCP state propagation, and AAR-focused observability.
+> C++ authoritative simulation baseline with multi-client roles, a protocol-defined TCP/UDP split, and AAR-focused observability.
 
 ## Project Overview
 
@@ -9,11 +9,25 @@ Interceptor Command Simulation System is a **single flagship portfolio project**
 The goal is **not** to present a consumer game. The goal is to present a **battlefield-system style real-time simulation/control system** that demonstrates:
 - C++ real-time server/software engineering
 - server-authoritative state management
-- TCP/UDP role separation
-- multi-client handling
+- protocol-defined TCP/UDP role separation
+- multi-client command/viewer handling
 - resilience under abnormal network conditions
 - replayable logging / AAR (After Action Review)
 - operability and explanation quality suitable for interviews
+
+## Repository Status
+
+This repository is currently in **execution-prep / early implementation** stage.
+
+- documentation scaffold is committed
+- placeholder config/examples are committed
+- canonical C++ build/test commands are committed
+- a minimal C++/CMake skeleton is committed
+- a shared protocol schema header is committed at `common/include/icss/protocol/messages.hpp`
+- local configure/build/test verification has passed for the current skeleton
+
+This is still an early implementation baseline, but the repository now supports configure/build/test verification.
+The current runtime is **in-process** and uses a committed protocol schema to model TCP/UDP responsibilities; live socket transport has not been added yet.
 
 ## Positioning
 
@@ -67,6 +81,40 @@ The goal is **not** to present a consumer game. The goal is to present a **battl
 - `docs/interview-guide.md` — interview-facing messaging and Q&A
 - `docs/demo-script.md` — recommended demo flow
 - `docs/week1-checklist.md` — immediate Week 1 execution checklist
+
+## Canonical Commands
+
+### Configure
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+```
+
+### Build
+
+```bash
+cmake --build build
+```
+
+### Test
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+## Current Code Skeleton
+
+- `CMakeLists.txt` — root build/test entrypoint
+- `common/include/icss/protocol/messages.hpp` — shared protocol/message schema
+- `common/include/icss/core/` — shared session/domain types and simulation API
+- `common/src/` — simulation runtime, AAR writer, ASCII tactical viewer renderer
+- `server/src/main.cpp` — baseline authoritative demo entrypoint
+- `clients/command-console/src/main.cpp` — command console baseline flow
+- `clients/tactical-viewer/src/main.cpp` — minimal 2D tactical viewer baseline
+- `tests/protocol/src/protocol_smoke.cpp` — protocol smoke verification
+- `tests/scenario/src/scenario_flow.cpp` — end-to-end baseline scenario regression
+- `tests/scenario/src/validation_rejects_invalid_flow.cpp` — invalid command-order regression
+- `tests/resilience/src/resilience_smoke.cpp` — reconnect/rendering resilience regression
 
 ## High-Level Repo Layout
 

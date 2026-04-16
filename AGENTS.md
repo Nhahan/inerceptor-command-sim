@@ -78,13 +78,14 @@ This repository is in **execution-prep / early implementation** stage.
 At this moment:
 - documentation scaffold exists
 - config examples exist
-- implementation placeholders exist
-- **no canonical C++ build system is committed yet**
+- a minimal C++/CMake skeleton is committed
+- a canonical protocol schema header is committed at `common/include/icss/protocol/messages.hpp`
+- a baseline authoritative simulation runtime is committed under `common/include/icss/core/` and `common/src/`
+- baseline regressions cover protocol, scenario flow, invalid command rejection, and resilience
 
 Therefore:
-- do **not** invent build/test success claims
-- do **not** pretend commands exist if they are not committed
-- when adding build/test tooling, also update `README.md` and this file in the same change
+- do **not** invent capabilities beyond the committed skeleton
+- when changing build/test tooling, also update `README.md`, `docs/test-report.md`, and this file in the same change
 
 ## 6) Read these files first
 
@@ -116,15 +117,13 @@ If code and docs diverge, fix the divergence instead of working around it silent
 
 ## 8) Build / test commands
 
-No canonical commands are committed yet.
+Canonical commands are now:
 
-When you introduce them, add a concrete section here such as:
-- configure/build command
-- test command
-- scenario/demo command
-- lint/format command (if any)
+- Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug`
+- Build: `cmake --build build`
+- Test: `ctest --test-dir build --output-on-failure`
 
-Until then, do not claim that a command is the standard command for the repo.
+If these commands change, update this file, `README.md`, and `docs/test-report.md` together.
 
 ## 9) When to add nested instructions later
 
