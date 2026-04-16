@@ -1,0 +1,46 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# OMX / local planning artifacts
+.omx/
+
+# Build outputs
+/build/
+/out/
+/bin/
+/lib/
+/obj/
+/Debug/
+/Release/
+/cmake-build-*/
+
+# CMake / generated build files
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.cache
+*.pid
+
+# Runtime / local config
+.env
+.env.*
+!.env.example
+
+# Archives / local recordings
+recordings/
+*.zip
+*.tar
+*.tar.gz
+
+# Python cache (for local tooling only)
+__pycache__/
+*.pyc
