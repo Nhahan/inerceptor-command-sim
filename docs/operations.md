@@ -18,6 +18,46 @@ Current config entry points:
 - `configs/logging.example.yaml`
 - loader: `common/src/config.cpp`
 
+Validation rules:
+- valid IPv4 `bind_host`
+- positive tick and telemetry intervals
+- non-negative TCP/UDP ports within range
+- heartbeat timeout greater than or equal to heartbeat interval
+- positive batch and client counts
+- frame format limited to `json` or `binary`
+
+Server entry surfaces:
+- `./build/icss_server --backend in_process`
+- `./build/icss_server --backend socket_live --tick-limit <N>`
+
+Startup output should expose at least:
+- backend selection
+- bind host and active TCP/UDP ports
+- frame format
+- heartbeat interval/timeout
+- delivery settings such as `udp_send_latest_only` and `udp_max_batch_snapshots`
+- command and viewer connection state
+- latest event type when available
+- current viewer connection/freshness state
+- latest snapshot sequence, or `none` when the server has not emitted a snapshot yet
+
+Useful startup overrides for smoke and integration runs:
+- `--tcp-port 0`
+- `--udp-port 0`
+- `--tick-limit <N>`
+- `--tick-sleep-ms <N>`
+- `--run-forever`
+- `--tick-rate-hz <N>`
+- `--telemetry-interval-ms <N>`
+- `--heartbeat-interval-ms <N>`
+- `--heartbeat-timeout-ms <N>`
+- `--udp-max-batch-snapshots <N>`
+- `--udp-send-latest-only true|false`
+- `--max-clients <N>`
+
+Precedence rule:
+- CLI overrides take precedence over values loaded from `configs/*.yaml`
+
 ### Logging
 Minimum expectations:
 - structured enough to reconstruct timeline
@@ -31,6 +71,13 @@ Current log output:
 - AAR artifacts are written under `assets/sample-aar/`
 - `logs/session.log` now contains one session-summary record plus structured event records
 - the summary log includes backend name, judgment code, and resilience summary
+- runtime log and generated artifacts carry explicit schema/version fields
+
+Live mode output parity:
+- when snapshots exist, `socket_live` mode also writes session log, AAR artifacts, and sample output
+- when no snapshot has been emitted yet, startup output reports that AAR artifacts were skipped
+- during signal-driven shutdown, the server reports shutdown reason and flushes summary/output artifacts before exit
+- the summary artifact is emitted in both Markdown and JSON forms
 
 Current live transport operational concerns:
 - one active command console connection per runtime instance

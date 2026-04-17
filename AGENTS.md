@@ -84,6 +84,9 @@ Current shape:
 - authoritative runtime under `common/include/icss/core/` and `common/src/`
 - shared protocol schema under `common/include/icss/protocol/`
 - in-process and socket-based transport backends
+- executable server modes for `in_process` and `socket_live`
+- process-level live smoke coverage for the executable `socket_live` path
+- graceful shutdown coverage for long-running `socket_live` execution
 - single-session live transport with one command console and one tactical viewer
 - replay, timeout, batching, and logging coverage in tests
 

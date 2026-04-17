@@ -59,3 +59,5 @@ The live `aar_response` should report:
 
 Keep at least one inspectable artifact under `assets/sample-aar/`.
 The session summary should expose latest snapshot metadata, freshness state, and a short recent-event section.
+The replay timeline and summary artifacts should carry explicit schema/version metadata.
+When both are present, `session-summary.md` is the human-readable view and `session-summary.json` is the machine-readable companion.

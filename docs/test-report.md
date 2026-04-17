@@ -29,6 +29,18 @@ ctest --test-dir build --output-on-failure
 Current verification covers:
 - the CMake project configures successfully
 - the primary executables build successfully
+- the server CLI accepts valid backend modes and rejects invalid backend/frame selections
+- invalid runtime/config values are rejected before execution
+- server CLI overrides are validated and reflected in startup output
+- CLI override precedence over file config is verified
+- startup output exposes backend, bind, heartbeat, and delivery settings
+- startup output exposes connection-state and latest-event summaries
+- the executable `socket_live` server path is exercised through a process-level live smoke
+- process-level live smoke covers AAR response and scenario stop handling
+- process-level live smoke covers both binary and JSON TCP framing
+- process-level live smoke verifies artifact/log generation for executable live mode
+- long-running live mode handles signal-driven shutdown and flushes outputs
+- startup output exposes current viewer state and idle/no-snapshot conditions
 - the shared protocol schema compiles and passes smoke checks
 - concrete payload serialization/parsing round-trips successfully
 - JSON and binary frame codecs round-trip successfully
@@ -39,19 +51,25 @@ Current verification covers:
 - invalid command ordering is rejected and logged
 - runtime config loading is verified against the example config set
 - runtime artifact paths are verified against configurable repo roots
+- runtime artifacts and logs expose stable schema/version metadata
+- session summary is emitted in both Markdown and JSON forms
 - runtime session logging is verified against generated structured log output
 - replay cursor stepping is verified against viewer output
 - resilience/replay rendering behavior passes smoke verification
 - live viewer heartbeat timeout behavior is verified against the socket backend
 - live viewer freshness transitions are verified against the socket backend
+- degraded freshness under packet loss is verified in rendered output
 - live snapshot batching/filtering is verified against the socket backend
 
 ## Latest Result
 
 - configure: passed
 - build: passed
-- test: passed (`15/15` tests)
+- test: passed (`28/28` tests)
 - runtime smoke: passed (`icss_server`, `icss_command_console`, `icss_tactical_viewer`)
+- cli smoke: passed (`server_inprocess_cli_smoke`, `server_socket_live_cli_smoke`)
+- idle cli smoke: passed (`server_socket_live_idle_cli_smoke`)
+- process live smoke: passed (`server_process_live_smoke`, `server_process_live_json_smoke`, `server_process_live_run_forever_smoke`)
 - verified targets:
   - `protocol_smoke`
   - `payload_codec_smoke`
@@ -61,6 +79,8 @@ Current verification covers:
   - `scenario_flow`
   - `validation_rejects_invalid_flow`
   - `runtime_config_smoke`
+  - `runtime_config_invalid_values_smoke`
+  - `server_cli_override_precedence_smoke`
   - `runtime_artifact_paths_smoke`
   - `session_log_smoke`
   - `replay_cursor_smoke`
@@ -68,6 +88,18 @@ Current verification covers:
   - `timeout_smoke`
   - `socket_live_viewer_timeout_smoke`
   - `socket_live_snapshot_batching_smoke`
+  - `server_inprocess_cli_smoke`
+  - `server_socket_live_cli_smoke`
+  - `server_socket_live_idle_cli_smoke`
+  - `server_process_live_smoke`
+  - `server_process_live_json_smoke`
+  - `server_process_live_run_forever_smoke`
+  - `server_invalid_backend_cli`
+  - `server_invalid_frame_format_cli`
+  - `server_invalid_port_cli`
+  - `server_invalid_bind_host_cli`
+  - `server_invalid_heartbeat_cli`
+  - `server_invalid_batch_cli`
 
 ## Acceptance Checks
 

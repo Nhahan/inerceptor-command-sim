@@ -23,11 +23,15 @@ This repository contains an implemented system with deterministic local verifica
 - CMake-based configure/build/test flow
 - shared protocol schema plus payload/frame codecs
 - deterministic in-process runtime plus socket-based transport backend
+- executable server modes for `in_process` and `socket_live`
+- process-level live smoke for the executable `socket_live` server path
+- live server mode writes runtime log and AAR/sample outputs when snapshots exist
 - single-session live transport policy with one command console and one tactical viewer
 - command, snapshot, telemetry, AAR, and timeout flows exercised in code
 - regression coverage for protocol, runtime, transport, logging, replay, and resilience paths
 
 The default runtime remains **in-process** for deterministic verification, while a separate live socket backend provides TCP/UDP bind/listen behavior, command/AAR exchange, heartbeat handling, and configurable snapshot delivery.
+Both server modes now print backend, bind, heartbeat, and delivery settings at startup.
 
 ## Focus
 
@@ -84,6 +88,16 @@ The default runtime remains **in-process** for deterministic verification, while
 - `docs/design-faq.md` — public design rationale and common questions
 - `docs/walkthrough.md` — recommended system walkthrough
 - `docs/implementation-checklist.md` — implementation checklist
+- `docs/reviewer-brief.md` — short review entrypoint
+- `docs/discussion-guide.md` — discussion points and expected questions
+
+## Quick Review Path
+
+1. `./build/icss_server --backend in_process`
+2. `assets/sample-aar/session-summary.md`
+3. `examples/sample-output.md`
+4. `docs/protocol.md`
+5. `docs/test-report.md`
 
 ## Canonical Commands
 
@@ -103,6 +117,17 @@ cmake --build build
 
 ```bash
 ctest --test-dir build --output-on-failure
+```
+
+### Server
+
+```bash
+./build/icss_server --backend in_process
+./build/icss_server --backend socket_live --tick-limit 2
+./build/icss_server --backend socket_live --tcp-port 0 --udp-port 0 --tick-limit 40 --tick-sleep-ms 20
+./build/icss_server --backend socket_live --run-forever --tick-sleep-ms 20
+./build/icss_server --backend socket_live --bind-host 127.0.0.1 --tcp-port 0 --udp-port 0
+./build/icss_server --backend socket_live --tick-rate-hz 30 --telemetry-interval-ms 150 --heartbeat-interval-ms 600 --heartbeat-timeout-ms 1800 --udp-max-batch-snapshots 1 --udp-send-latest-only true --max-clients 4
 ```
 
 ## Code Paths
