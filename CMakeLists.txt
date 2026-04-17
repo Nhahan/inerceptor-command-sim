@@ -70,6 +70,18 @@ add_executable(icss_socket_live_single_session_policy_smoke tests/protocol/src/s
 target_link_libraries(icss_socket_live_single_session_policy_smoke PRIVATE icss_core)
 target_common(icss_socket_live_single_session_policy_smoke)
 
+add_executable(icss_server_process_live_smoke tests/protocol/src/server_process_live_smoke.cpp)
+target_link_libraries(icss_server_process_live_smoke PRIVATE icss_core)
+target_common(icss_server_process_live_smoke)
+
+add_executable(icss_server_process_live_json_smoke tests/protocol/src/server_process_live_json_smoke.cpp)
+target_link_libraries(icss_server_process_live_json_smoke PRIVATE icss_core)
+target_common(icss_server_process_live_json_smoke)
+
+add_executable(icss_server_process_live_run_forever_smoke tests/protocol/src/server_process_live_run_forever_smoke.cpp)
+target_link_libraries(icss_server_process_live_run_forever_smoke PRIVATE icss_core)
+target_common(icss_server_process_live_run_forever_smoke)
+
 add_executable(icss_scenario_flow tests/scenario/src/scenario_flow.cpp)
 target_link_libraries(icss_scenario_flow PRIVATE icss_core)
 target_common(icss_scenario_flow)
@@ -81,6 +93,14 @@ target_common(icss_validation_rejects_invalid_flow)
 add_executable(icss_runtime_config_smoke tests/scenario/src/runtime_config_smoke.cpp)
 target_link_libraries(icss_runtime_config_smoke PRIVATE icss_core)
 target_common(icss_runtime_config_smoke)
+
+add_executable(icss_runtime_config_invalid_values_smoke tests/scenario/src/runtime_config_invalid_values_smoke.cpp)
+target_link_libraries(icss_runtime_config_invalid_values_smoke PRIVATE icss_core)
+target_common(icss_runtime_config_invalid_values_smoke)
+
+add_executable(icss_server_cli_override_precedence_smoke tests/scenario/src/server_cli_override_precedence_smoke.cpp)
+target_link_libraries(icss_server_cli_override_precedence_smoke PRIVATE icss_core)
+target_common(icss_server_cli_override_precedence_smoke)
 
 add_executable(icss_runtime_artifact_paths_smoke tests/scenario/src/runtime_artifact_paths_smoke.cpp)
 target_link_libraries(icss_runtime_artifact_paths_smoke PRIVATE icss_core)
@@ -116,9 +136,14 @@ if(BUILD_TESTING)
     add_test(NAME frame_codec_smoke COMMAND icss_frame_codec_smoke)
     add_test(NAME transport_backend_smoke COMMAND icss_transport_backend_smoke)
     add_test(NAME socket_live_single_session_policy_smoke COMMAND icss_socket_live_single_session_policy_smoke)
+    add_test(NAME server_process_live_smoke COMMAND icss_server_process_live_smoke)
+    add_test(NAME server_process_live_json_smoke COMMAND icss_server_process_live_json_smoke)
+    add_test(NAME server_process_live_run_forever_smoke COMMAND icss_server_process_live_run_forever_smoke)
     add_test(NAME scenario_flow COMMAND icss_scenario_flow)
     add_test(NAME validation_rejects_invalid_flow COMMAND icss_validation_rejects_invalid_flow)
     add_test(NAME runtime_config_smoke COMMAND icss_runtime_config_smoke)
+    add_test(NAME runtime_config_invalid_values_smoke COMMAND icss_runtime_config_invalid_values_smoke)
+    add_test(NAME server_cli_override_precedence_smoke COMMAND icss_server_cli_override_precedence_smoke)
     add_test(NAME runtime_artifact_paths_smoke COMMAND icss_runtime_artifact_paths_smoke)
     add_test(NAME session_log_smoke COMMAND icss_session_log_smoke)
     add_test(NAME replay_cursor_smoke COMMAND icss_replay_cursor_smoke)
@@ -126,4 +151,67 @@ if(BUILD_TESTING)
     add_test(NAME timeout_smoke COMMAND icss_timeout_smoke)
     add_test(NAME socket_live_viewer_timeout_smoke COMMAND icss_socket_live_viewer_timeout_smoke)
     add_test(NAME socket_live_snapshot_batching_smoke COMMAND icss_socket_live_snapshot_batching_smoke)
+    add_test(
+        NAME server_inprocess_cli_smoke
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|in_process
+            -DEXPECTED=backend=in_process|heartbeat_timeout_ms=|command_console_connection=connected|viewer_connection=connected|last_event_type=session_ended|AAR\ artifacts\ written\ to
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_success.cmake)
+    add_test(
+        NAME server_socket_live_cli_smoke
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--tick-limit|2|--tick-rate-hz|30|--telemetry-interval-ms|150|--heartbeat-interval-ms|600|--heartbeat-timeout-ms|1800|--udp-max-batch-snapshots|1|--udp-send-latest-only|true|--max-clients|4
+            -DEXPECTED=backend=socket_live|binds_network=true|tick_rate_hz=30|telemetry_interval_ms=150|heartbeat_interval_ms=600|heartbeat_timeout_ms=1800|udp_send_latest_only=true|udp_max_batch_snapshots=1|max_clients=4|command_console_connection=disconnected|viewer_connection=disconnected|last_event_type=resilience_triggered|latest_freshness=stale|latest_snapshot_sequence=2
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_success.cmake)
+    add_test(
+        NAME server_socket_live_idle_cli_smoke
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--tick-limit|0
+            -DEXPECTED=backend=socket_live|phase=initialized|snapshots=0|command_console_connection=disconnected|viewer_connection=disconnected|last_event_type=none|latest_freshness=stale|latest_snapshot_sequence=none
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_success.cmake)
+    add_test(
+        NAME server_invalid_backend_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|invalid
+            -DEXPECTED=unsupported\ backend
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_failure.cmake)
+    add_test(
+        NAME server_invalid_frame_format_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--tick-limit|1|--tcp-frame-format|invalid
+            -DEXPECTED=server.tcp_frame_format
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_failure.cmake)
+    add_test(
+        NAME server_invalid_port_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--tcp-port|-1
+            -DEXPECTED=server.tcp_port
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_failure.cmake)
+    add_test(
+        NAME server_invalid_bind_host_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--bind-host|999.0.0.1
+            -DEXPECTED=server.bind_host
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_failure.cmake)
+    add_test(
+        NAME server_invalid_heartbeat_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--heartbeat-interval-ms|1000|--heartbeat-timeout-ms|500
+            -DEXPECTED=server.heartbeat_timeout_ms
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_failure.cmake)
+    add_test(
+        NAME server_invalid_batch_cli
+        COMMAND ${CMAKE_COMMAND}
+            -DICSS_SERVER=$<TARGET_FILE:icss_server>
+            -DARGS=--backend|socket_live|--udp-max-batch-snapshots|0
+            -DEXPECTED=server.udp_max_batch_snapshots
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/expect_server_failure.cmake)
 endif()

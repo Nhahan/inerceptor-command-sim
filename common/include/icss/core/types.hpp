@@ -117,8 +117,12 @@ struct SessionSummary {
     SessionPhase phase {SessionPhase::Initialized};
     std::size_t snapshot_count {};
     std::size_t event_count {};
+    ConnectionState command_console_connection {ConnectionState::Disconnected};
+    ConnectionState viewer_connection {ConnectionState::Disconnected};
     bool judgment_ready {false};
     JudgmentCode judgment_code {JudgmentCode::Pending};
+    bool has_last_event {false};
+    protocol::EventType last_event_type {protocol::EventType::SessionStarted};
     std::string resilience_case;
 };
 

@@ -10,6 +10,8 @@
 namespace icss::core {
 namespace {
 
+constexpr std::string_view kRuntimeLogSchemaVersion = "icss-runtime-log-v1";
+
 std::string escape_json(std::string_view input) {
     std::string escaped;
     escaped.reserve(input.size());
@@ -68,33 +70,7 @@ RuntimeResult BaselineRuntime::run() const {
     transport->write_aar_artifacts(aar_dir);
     transport->write_example_output(example_output, icss::view::make_replay_cursor(summary.event_count, summary.event_count == 0 ? 0 : summary.event_count - 1));
 
-    std::filesystem::create_directories(log_file.parent_path());
-    std::ofstream log(log_file);
-    log << "{\"record_type\":\"session_summary\",\"level\":\"" << escape_json(config_.logging.level)
-        << "\",\"backend\":\"" << transport->backend_name()
-        << "\",\"session_id\":" << summary.session_id
-        << ",\"phase\":\"" << escape_json(to_string(summary.phase))
-        << "\",\"snapshot_count\":" << summary.snapshot_count
-        << ",\"event_count\":" << summary.event_count
-        << ",\"judgment_code\":\"" << escape_json(to_string(summary.judgment_code)) << "\""
-        << ",\"resilience\":\"" << escape_json(summary.resilience_case) << "\"}\n";
-    for (const auto& event : transport->events()) {
-        log << "{\"record_type\":\"event\""
-            << ",\"tick\":" << event.header.tick
-            << ",\"timestamp_ms\":" << event.header.timestamp_ms
-            << ",\"event_type\":\"" << icss::protocol::to_string(event.header.event_type) << "\""
-            << ",\"source\":\"" << escape_json(event.source) << "\""
-            << ",\"summary\":\"" << escape_json(event.summary) << "\""
-            << ",\"details\":\"" << escape_json(event.details) << "\""
-            << ",\"entity_ids\":[";
-        for (std::size_t index = 0; index < event.entity_ids.size(); ++index) {
-            log << "\"" << escape_json(event.entity_ids[index]) << "\"";
-            if (index + 1 != event.entity_ids.size()) {
-                log << ",";
-            }
-        }
-        log << "]}\n";
-    }
+    write_runtime_session_log(config_, transport->backend_name(), summary, transport->events());
 
     return {config_, summary};
 }
@@ -118,6 +94,44 @@ SimulationSession run_baseline_demo(const RuntimeConfig& config) {
     session.advance_tick();
     session.archive_session();
     return session;
+}
+
+void write_runtime_session_log(const RuntimeConfig& config,
+                               std::string_view backend_name,
+                               const SessionSummary& summary,
+                               const std::vector<EventRecord>& events) {
+    const auto log_file = config.repo_root / config.logging.file_path;
+    std::filesystem::create_directories(log_file.parent_path());
+    std::ofstream log(log_file);
+    log << "{\"schema_version\":\"" << kRuntimeLogSchemaVersion
+        << "\",\"record_type\":\"session_summary\",\"level\":\"" << escape_json(config.logging.level)
+        << "\",\"backend\":\"" << escape_json(backend_name)
+        << "\",\"session_id\":" << summary.session_id
+        << ",\"phase\":\"" << escape_json(to_string(summary.phase))
+        << "\",\"snapshot_count\":" << summary.snapshot_count
+        << ",\"event_count\":" << summary.event_count
+        << ",\"command_console_connection\":\"" << escape_json(to_string(summary.command_console_connection)) << "\""
+        << ",\"viewer_connection\":\"" << escape_json(to_string(summary.viewer_connection)) << "\""
+        << ",\"judgment_code\":\"" << escape_json(to_string(summary.judgment_code)) << "\""
+        << ",\"last_event_type\":\"" << escape_json(summary.has_last_event ? std::string(icss::protocol::to_string(summary.last_event_type)) : std::string("none")) << "\""
+        << ",\"resilience\":\"" << escape_json(summary.resilience_case) << "\"}\n";
+    for (const auto& event : events) {
+        log << "{\"schema_version\":\"" << kRuntimeLogSchemaVersion << "\",\"record_type\":\"event\""
+            << ",\"tick\":" << event.header.tick
+            << ",\"timestamp_ms\":" << event.header.timestamp_ms
+            << ",\"event_type\":\"" << icss::protocol::to_string(event.header.event_type) << "\""
+            << ",\"source\":\"" << escape_json(event.source) << "\""
+            << ",\"summary\":\"" << escape_json(event.summary) << "\""
+            << ",\"details\":\"" << escape_json(event.details) << "\""
+            << ",\"entity_ids\":[";
+        for (std::size_t index = 0; index < event.entity_ids.size(); ++index) {
+            log << "\"" << escape_json(event.entity_ids[index]) << "\"";
+            if (index + 1 != event.entity_ids.size()) {
+                log << ",";
+            }
+        }
+        log << "]}\n";
+    }
 }
 
 }  // namespace icss::core

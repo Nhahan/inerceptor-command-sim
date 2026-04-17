@@ -31,6 +31,23 @@ int main() {
     assert(frame.find("Entities:") != std::string::npos);
     assert(frame.find("freshness=") != std::string::npos);
 
+    SimulationSession degraded_session;
+    degraded_session.connect_client(ClientRole::CommandConsole, 101U);
+    degraded_session.connect_client(ClientRole::TacticalViewer, 201U);
+    degraded_session.start_scenario();
+    degraded_session.request_track();
+    degraded_session.advance_tick();
+    degraded_session.activate_asset();
+    degraded_session.issue_command();
+    degraded_session.advance_tick();
+    const auto degraded_frame = icss::view::render_tactical_frame(
+        degraded_session.latest_snapshot(),
+        degraded_session.events(),
+        icss::view::make_replay_cursor(degraded_session.events().size(),
+                                       degraded_session.events().empty() ? 0 : degraded_session.events().size() - 1));
+    assert(degraded_frame.find("packet_loss_pct=25.0") != std::string::npos);
+    assert(degraded_frame.find("freshness=degraded") != std::string::npos);
+
     SimulationSession reconnect_session;
     reconnect_session.connect_client(ClientRole::CommandConsole, 101U);
     reconnect_session.connect_client(ClientRole::TacticalViewer, 201U);

@@ -1,6 +1,7 @@
 #include "icss/core/config.hpp"
 
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -48,11 +49,53 @@ std::string value_after_colon(const std::string& line) {
 }
 
 bool parse_bool(const std::string& text) {
-    return text == "true";
+    if (text == "true") {
+        return true;
+    }
+    if (text == "false") {
+        return false;
+    }
+    throw std::runtime_error("boolean value must be true or false");
 }
 
 int parse_int(const std::string& text) {
     return std::stoi(text);
+}
+
+void require_positive(std::string_view field, int value) {
+    if (value <= 0) {
+        throw std::runtime_error(std::string(field) + " must be greater than zero");
+    }
+}
+
+void require_non_negative_port(std::string_view field, int value) {
+    if (value < 0 || value > 65535) {
+        throw std::runtime_error(std::string(field) + " must be between 0 and 65535");
+    }
+}
+
+void validate_ipv4_host(const std::string& host) {
+    std::stringstream ss(host);
+    std::string octet;
+    int count = 0;
+    while (std::getline(ss, octet, '.')) {
+        if (octet.empty() || octet.size() > 3) {
+            throw std::runtime_error("server.bind_host must be a valid IPv4 address");
+        }
+        for (char ch : octet) {
+            if (ch < '0' || ch > '9') {
+                throw std::runtime_error("server.bind_host must be a valid IPv4 address");
+            }
+        }
+        const int value = std::stoi(octet);
+        if (value < 0 || value > 255) {
+            throw std::runtime_error("server.bind_host must be a valid IPv4 address");
+        }
+        ++count;
+    }
+    if (count != 4) {
+        throw std::runtime_error("server.bind_host must be a valid IPv4 address");
+    }
 }
 
 ServerConfig load_server_config(const std::filesystem::path& file) {
@@ -112,7 +155,33 @@ RuntimeConfig load_runtime_config(const std::filesystem::path& repo_root) {
     config.server = load_server_config(repo_root / "configs/server.example.yaml");
     config.scenario = load_scenario_config(repo_root / "configs/scenario.example.yaml");
     config.logging = load_logging_config(repo_root / "configs/logging.example.yaml");
+    validate_runtime_config(config);
     return config;
+}
+
+void validate_runtime_config(const RuntimeConfig& config) {
+    validate_ipv4_host(config.server.bind_host);
+    require_positive("server.tick_rate_hz", config.server.tick_rate_hz);
+    require_non_negative_port("server.tcp_port", config.server.tcp_port);
+    require_non_negative_port("server.udp_port", config.server.udp_port);
+    require_positive("server.udp_max_batch_snapshots", config.server.udp_max_batch_snapshots);
+    require_positive("server.heartbeat_interval_ms", config.server.heartbeat_interval_ms);
+    require_positive("server.heartbeat_timeout_ms", config.server.heartbeat_timeout_ms);
+    require_positive("server.max_clients", config.server.max_clients);
+    if (config.server.heartbeat_timeout_ms < config.server.heartbeat_interval_ms) {
+        throw std::runtime_error("server.heartbeat_timeout_ms must be greater than or equal to server.heartbeat_interval_ms");
+    }
+    if (config.server.tcp_frame_format != "json" && config.server.tcp_frame_format != "binary") {
+        throw std::runtime_error("server.tcp_frame_format must be one of: json, binary");
+    }
+
+    require_positive("scenario.targets", config.scenario.targets);
+    require_positive("scenario.assets", config.scenario.assets);
+    require_positive("scenario.telemetry_interval_ms", config.scenario.telemetry_interval_ms);
+
+    if (config.logging.outputs.empty()) {
+        throw std::runtime_error("logging.outputs must not be empty");
+    }
 }
 
 }  // namespace icss::core

@@ -43,6 +43,7 @@ struct RuntimeConfig {
     std::filesystem::path repo_root;
 };
 
+void validate_runtime_config(const RuntimeConfig& config);
 RuntimeConfig load_runtime_config(const std::filesystem::path& repo_root);
 
 }  // namespace icss::core

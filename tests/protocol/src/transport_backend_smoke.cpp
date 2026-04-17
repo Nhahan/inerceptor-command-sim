@@ -9,6 +9,7 @@
 #include "icss/protocol/frame_codec.hpp"
 #include "icss/protocol/payloads.hpp"
 #include "icss/protocol/serialization.hpp"
+#include "icss/view/ascii_tactical_view.hpp"
 
 #if !defined(_WIN32)
 #include <arpa/inet.h>
@@ -226,6 +227,16 @@ int main() {
     assert(command_ack.accepted);
 
     live->advance_tick();
+    {
+        const auto degraded_snapshot = live->latest_snapshot();
+        assert(degraded_snapshot.telemetry.packet_loss_pct > 0.0F);
+        const auto degraded_frame = icss::view::render_tactical_frame(
+            degraded_snapshot,
+            live->events(),
+            icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
+        assert(degraded_frame.find("freshness=degraded") != std::string::npos);
+        assert(degraded_frame.find("packet_loss_pct=25.0") != std::string::npos);
+    }
     live->advance_tick();
 
     send_binary_frame(tcp_client.fd, "scenario_stop", serialize(ScenarioStopPayload{{1001U, 101U, 7U}, "scenario stop requested"}));

@@ -30,6 +30,7 @@ namespace {
 constexpr std::uint32_t kDefaultSessionId = 1001U;
 constexpr std::string_view kTargetId = "target-alpha";
 constexpr std::string_view kAssetId = "asset-interceptor";
+constexpr std::string_view kSampleOutputSchemaVersion = "icss-sample-output-v1";
 
 icss::protocol::FrameFormat parse_frame_format(std::string_view value) {
     if (value == "json") {
@@ -183,11 +184,15 @@ public:
         const auto summary = session_.build_summary();
         const auto snapshot = session_.latest_snapshot();
         out << "# Sample Output\n\n";
+        out << "- schema_version: " << kSampleOutputSchemaVersion << "\n";
         out << "- backend: in_process\n";
         out << "- session_id: " << summary.session_id << "\n";
         out << "- cursor_index: " << cursor.index << "/" << cursor.total << "\n";
+        out << "- command_console_connection: " << icss::core::to_string(summary.command_console_connection) << "\n";
+        out << "- viewer_connection: " << icss::core::to_string(summary.viewer_connection) << "\n";
         out << "- latest_freshness: " << icss::view::freshness_label(snapshot) << "\n";
         out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
+        out << "- last_event_type: " << (summary.has_last_event ? icss::protocol::to_string(summary.last_event_type) : "none") << "\n";
         out << "- resilience_case: " << summary.resilience_case << "\n\n";
         out << "```text\n";
         out << icss::view::render_tactical_frame(snapshot, recent_events(session_), cursor);
@@ -413,11 +418,15 @@ public:
         const auto summary = session_.build_summary();
         const auto snapshot = session_.latest_snapshot();
         out << "# Sample Output\n\n";
+        out << "- schema_version: " << kSampleOutputSchemaVersion << "\n";
         out << "- backend: socket_live\n";
         out << "- session_id: " << summary.session_id << "\n";
         out << "- cursor_index: " << cursor.index << "/" << cursor.total << "\n";
+        out << "- command_console_connection: " << icss::core::to_string(summary.command_console_connection) << "\n";
+        out << "- viewer_connection: " << icss::core::to_string(summary.viewer_connection) << "\n";
         out << "- latest_freshness: " << icss::view::freshness_label(snapshot) << "\n";
         out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
+        out << "- last_event_type: " << (summary.has_last_event ? icss::protocol::to_string(summary.last_event_type) : "none") << "\n";
         out << "- resilience_case: " << summary.resilience_case << "\n\n";
         out << "```text\n";
         out << icss::view::render_tactical_frame(snapshot, recent_events(session_), cursor);
