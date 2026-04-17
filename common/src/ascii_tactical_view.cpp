@@ -22,7 +22,7 @@ void place(std::vector<std::string>& grid, int x, int y, char glyph) {
     }
 }
 
-std::string freshness_label(const icss::core::Snapshot& snapshot) {
+std::string freshness_label_impl(const icss::core::Snapshot& snapshot) {
     switch (snapshot.viewer_connection) {
     case icss::core::ConnectionState::TimedOut:
     case icss::core::ConnectionState::Disconnected:
@@ -39,6 +39,10 @@ std::string freshness_label(const icss::core::Snapshot& snapshot) {
 }
 
 }  // namespace
+
+std::string freshness_label(const icss::core::Snapshot& snapshot) {
+    return freshness_label_impl(snapshot);
+}
 
 std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
                                   const std::vector<icss::core::EventRecord>& recent_events,
@@ -65,7 +69,7 @@ std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
         << ", judgment=" << icss::core::to_string(snapshot.judgment.code) << '\n';
     out << "Telemetry:\n";
     out << "- connection=" << icss::core::to_string(snapshot.viewer_connection)
-        << ", freshness=" << freshness_label(snapshot)
+        << ", freshness=" << freshness_label_impl(snapshot)
         << ", snapshot_sequence=" << snapshot.header.snapshot_sequence
         << ", tick=" << snapshot.telemetry.tick
         << ", latency_ms=" << snapshot.telemetry.latency_ms

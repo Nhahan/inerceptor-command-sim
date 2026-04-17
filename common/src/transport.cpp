@@ -180,8 +180,17 @@ public:
                               const icss::view::ReplayCursor& cursor) const override {
         std::filesystem::create_directories(output_file.parent_path());
         std::ofstream out(output_file);
-        out << "# Sample Output\n\n```text\n";
-        out << icss::view::render_tactical_frame(session_.latest_snapshot(), recent_events(session_), cursor);
+        const auto summary = session_.build_summary();
+        const auto snapshot = session_.latest_snapshot();
+        out << "# Sample Output\n\n";
+        out << "- backend: in_process\n";
+        out << "- session_id: " << summary.session_id << "\n";
+        out << "- cursor_index: " << cursor.index << "/" << cursor.total << "\n";
+        out << "- latest_freshness: " << icss::view::freshness_label(snapshot) << "\n";
+        out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
+        out << "- resilience_case: " << summary.resilience_case << "\n\n";
+        out << "```text\n";
+        out << icss::view::render_tactical_frame(snapshot, recent_events(session_), cursor);
         out << "```\n";
     }
 
@@ -401,8 +410,17 @@ public:
                               const icss::view::ReplayCursor& cursor) const override {
         std::filesystem::create_directories(output_file.parent_path());
         std::ofstream out(output_file);
-        out << "# Sample Output\n\n```text\n";
-        out << icss::view::render_tactical_frame(session_.latest_snapshot(), recent_events(session_), cursor);
+        const auto summary = session_.build_summary();
+        const auto snapshot = session_.latest_snapshot();
+        out << "# Sample Output\n\n";
+        out << "- backend: socket_live\n";
+        out << "- session_id: " << summary.session_id << "\n";
+        out << "- cursor_index: " << cursor.index << "/" << cursor.total << "\n";
+        out << "- latest_freshness: " << icss::view::freshness_label(snapshot) << "\n";
+        out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
+        out << "- resilience_case: " << summary.resilience_case << "\n\n";
+        out << "```text\n";
+        out << icss::view::render_tactical_frame(snapshot, recent_events(session_), cursor);
         out << "```\n";
     }
 

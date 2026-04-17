@@ -9,6 +9,7 @@
 #include "icss/protocol/frame_codec.hpp"
 #include "icss/protocol/payloads.hpp"
 #include "icss/protocol/serialization.hpp"
+#include "icss/view/ascii_tactical_view.hpp"
 #include "tests/support/temp_repo.hpp"
 
 #if !defined(_WIN32)
@@ -222,6 +223,16 @@ int main() {
     const auto asset_frame = wait_for_binary_frame(*live, command_client.fd);
     assert(asset_frame.kind == "command_ack");
     assert(parse_command_ack(asset_frame.payload).accepted);
+    {
+        const auto resync_snapshot = live->latest_snapshot();
+        const auto resync_frame = icss::view::render_tactical_frame(
+            resync_snapshot,
+            live->events(),
+            icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
+        assert(resync_snapshot.viewer_connection == ConnectionState::Reconnected);
+        assert(resync_frame.find("connection=reconnected") != std::string::npos);
+        assert(resync_frame.find("freshness=resync") != std::string::npos);
+    }
 
     send_binary_frame(command_client.fd,
                       "command_issue",
@@ -229,6 +240,16 @@ int main() {
     const auto command_frame = wait_for_binary_frame(*live, command_client.fd);
     assert(command_frame.kind == "command_ack");
     assert(parse_command_ack(command_frame.payload).accepted);
+    {
+        const auto steady_snapshot = live->latest_snapshot();
+        const auto steady_frame = icss::view::render_tactical_frame(
+            steady_snapshot,
+            live->events(),
+            icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
+        assert(steady_snapshot.viewer_connection == ConnectionState::Connected);
+        assert(steady_frame.find("connection=connected") != std::string::npos);
+        assert(steady_frame.find("freshness=fresh") != std::string::npos);
+    }
 
     live->advance_tick();
     live->advance_tick();

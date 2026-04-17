@@ -9,6 +9,7 @@
 #include "icss/protocol/frame_codec.hpp"
 #include "icss/protocol/payloads.hpp"
 #include "icss/protocol/serialization.hpp"
+#include "icss/view/ascii_tactical_view.hpp"
 
 #if !defined(_WIN32)
 #include <arpa/inet.h>
@@ -142,6 +143,13 @@ int main() {
     live->advance_tick();
     const auto snapshot = live->latest_snapshot();
     assert(snapshot.viewer_connection == ConnectionState::TimedOut);
+    const auto frame = icss::view::render_tactical_frame(
+        snapshot,
+        live->events(),
+        icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
+    assert(frame.find("connection=timed_out") != std::string::npos);
+    assert(frame.find("freshness=stale") != std::string::npos);
+    assert(frame.find("snapshot_sequence=") != std::string::npos);
     const auto summary = live->summary();
     assert(summary.resilience_case.find("timeout_visibility") != std::string::npos);
 

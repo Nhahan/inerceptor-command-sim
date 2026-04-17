@@ -24,6 +24,15 @@ std::string escape_json(std::string_view input) {
     return escaped;
 }
 
+std::vector<EventRecord> recent_events_for_artifact(const std::vector<EventRecord>& events) {
+    std::vector<EventRecord> recent;
+    const auto start = events.size() > 4 ? events.size() - 4 : 0;
+    for (std::size_t index = start; index < events.size(); ++index) {
+        recent.push_back(events[index]);
+    }
+    return recent;
+}
+
 }  // namespace
 
 SimulationSession::SimulationSession(std::uint32_t session_id, int tick_rate_hz, int telemetry_interval_ms)
@@ -282,8 +291,11 @@ void SimulationSession::write_aar_artifacts(const std::filesystem::path& output_
     timeline << "}\n";
 
     const auto summary = build_summary();
+    const auto snapshot = latest_snapshot();
+    const auto recent_events = recent_events_for_artifact(events_);
     std::ofstream summary_file(output_dir / "session-summary.md");
     summary_file << "# Sample AAR Session Summary\n\n";
+    summary_file << "## Summary\n\n";
     summary_file << "- session_id: " << summary.session_id << "\n";
     summary_file << "- final_phase: " << to_string(summary.phase) << "\n";
     summary_file << "- snapshot_count: " << summary.snapshot_count << "\n";
@@ -291,23 +303,35 @@ void SimulationSession::write_aar_artifacts(const std::filesystem::path& output_
     summary_file << "- judgment_ready: " << (summary.judgment_ready ? "true" : "false") << "\n";
     summary_file << "- judgment_code: " << to_string(summary.judgment_code) << "\n";
     summary_file << "- resilience_case: " << summary.resilience_case << "\n";
+    summary_file << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
+    summary_file << "- latest_viewer_connection: " << to_string(snapshot.viewer_connection) << "\n";
+    summary_file << "- latest_freshness: " << view::freshness_label(snapshot) << "\n";
+    summary_file << "\n## Recent Events\n\n";
+    for (const auto& event : recent_events) {
+        summary_file << "- [tick " << event.header.tick << "] "
+                     << event.summary << " (" << protocol::to_string(event.header.event_type) << ")\n";
+    }
 }
 
 void SimulationSession::write_example_output(const std::filesystem::path& output_file) const {
     std::filesystem::create_directories(output_file.parent_path());
     std::ofstream out(output_file);
 
-    std::vector<EventRecord> recent_events;
-    const auto start = events_.size() > 4 ? events_.size() - 4 : 0;
-    for (std::size_t index = start; index < events_.size(); ++index) {
-        recent_events.push_back(events_[index]);
-    }
+    const auto summary = build_summary();
+    const auto snapshot = latest_snapshot();
+    const auto recent_events = recent_events_for_artifact(events_);
+    const auto cursor = view::make_replay_cursor(events_.size(), events_.empty() ? 0 : events_.size() - 1);
     out << "# Sample Output\n\n";
+    out << "- session_id: " << summary.session_id << "\n";
+    out << "- cursor_index: " << cursor.index << "/" << cursor.total << "\n";
+    out << "- latest_freshness: " << view::freshness_label(snapshot) << "\n";
+    out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
+    out << "- resilience_case: " << summary.resilience_case << "\n\n";
     out << "```text\n";
     out << view::render_tactical_frame(
-        latest_snapshot(),
+        snapshot,
         recent_events,
-        view::make_replay_cursor(events_.size(), events_.empty() ? 0 : events_.size() - 1));
+        cursor);
     out << "```\n";
 }
 

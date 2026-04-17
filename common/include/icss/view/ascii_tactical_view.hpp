@@ -8,6 +8,7 @@
 
 namespace icss::view {
 
+std::string freshness_label(const icss::core::Snapshot& snapshot);
 std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
                                   const std::vector<icss::core::EventRecord>& recent_events,
                                   ReplayCursor cursor);
