@@ -39,6 +39,19 @@ Current verification covers:
 - the executable `socket_live` server path is exercised through a process-level live smoke
 - process-level live smoke covers AAR response and scenario stop handling
 - process-level live smoke covers both binary and JSON TCP framing
+- the command console executable drives a scripted `socket_live` flow over TCP
+- the SDL GUI viewer attaches to the live UDP path and is covered by a headless smoke
+- the repository ships a one-command live demo script with smoke coverage
+- the GUI control panel covers reset-to-initialized and restart-after-reset behavior
+- command acceptance now has explicit GUI-side visual feedback and dedicated smoke coverage
+- the GUI exposes mission phase, authoritative decision, and resilience telemetry as first-class panels rather than only map geometry
+- GUI headless smoke asserts phase banner and authoritative decision semantics through dump-state fields
+- GUI review smoke verifies that AAR is requested as a post-judgment/post-archive review action rather than a primary live control
+- the GUI routes review output through the bottom log panel, avoiding overlap with the live authoritative-decision panel
+- the GUI live timeline now includes control acknowledgements alongside server events so the log panel remains useful before the next telemetry update
+- user-facing viewer text now presents the asset as an interceptor
+- the GUI exposes scenario profile controls and a dense world-space tactical map
+- a GUI profile smoke verifies that selecting the timeout profile changes parameters and produces `timeout_observed`
 - process-level live smoke verifies artifact/log generation for executable live mode
 - long-running live mode handles signal-driven shutdown and flushes outputs
 - startup output exposes current viewer state and idle/no-snapshot conditions
@@ -47,6 +60,7 @@ Current verification covers:
 - JSON and binary frame codecs round-trip successfully
 - transport backend dispatch behavior is verified
 - live transport session policy is verified
+- scenario branching smoke verifies that command timing/kinematics can change the final judgment
 - AAR control semantics are verified
 - the scenario flow passes end-to-end regression
 - invalid command ordering is rejected and logged
@@ -68,7 +82,7 @@ Current verification covers:
 
 - configure: passed
 - build: passed
-- test: passed (`33/33` tests)
+- test: passed (`36/36` tests)
 - runtime smoke: passed (`icss_server`, `icss_command_console`, `icss_tactical_viewer`)
 - cli smoke: passed (`server_inprocess_cli_smoke`, `server_socket_live_cli_smoke`)
 - idle cli smoke: passed (`server_socket_live_idle_cli_smoke`)
@@ -99,6 +113,9 @@ Current verification covers:
   - `server_process_live_json_smoke`
   - `server_process_live_override_precedence_smoke`
   - `server_process_live_run_forever_smoke`
+  - `command_console_socket_live_smoke`
+  - `tactical_viewer_gui_live_smoke`
+  - `live_demo_script_smoke`
   - `server_invalid_backend_cli`
   - `server_invalid_frame_format_cli`
   - `server_invalid_port_cli`

@@ -8,7 +8,7 @@ Use one representative training/control scenario.
 1. session starts
 2. target appears / is detected
 3. tracking request is issued
-4. asset becomes available / activated
+4. interceptor becomes available / activated
 5. command is issued from the command console
 6. server validates and judges the outcome
 7. result is reviewed through AAR/replay
@@ -19,6 +19,9 @@ Use one representative training/control scenario.
 - shows multi-client visibility
 - can generate meaningful AAR output
 - can survive at least one abnormal network case in validation coverage
+- uses a denser 24x16 world rather than a toy-sized board
+- keeps target/interceptor motion live over time so waiting changes the geometry
+- can branch between `intercept_success` and `timeout_observed` based on timing and kinematics
 
 ## State Flow
 
@@ -33,7 +36,7 @@ The runtime rejects out-of-order control steps:
 ## Entity Types
 
 - `Target`
-- `Asset`
+- `Interceptor asset`
 - `Track`
 - `Session`
 - `Command`
@@ -45,7 +48,7 @@ The tactical viewer should make the scenario legible as an observability-first d
 - where targets/assets are
 - whether tracking exists
 - how confident tracking currently is
-- what asset status and command lifecycle state are active
+- what interceptor status and command lifecycle state are active
 - whether connection/snapshot status is healthy
 - where the AAR playback cursor is in replay mode
 

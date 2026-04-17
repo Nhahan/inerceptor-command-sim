@@ -53,7 +53,7 @@ Both server modes now print backend, bind, heartbeat, and delivery settings at s
   - reconnect, timeout, or UDP loss recovery
 
 ### Viewer Surface
-- target / asset position icons
+- target / interceptor position icons
 - tracking status
 - tracking confidence
 - connection status
@@ -130,6 +130,63 @@ ctest --test-dir build --output-on-failure
 ./build/icss_server --backend socket_live --tick-rate-hz 30 --telemetry-interval-ms 150 --heartbeat-interval-ms 600 --heartbeat-timeout-ms 1800 --udp-max-batch-snapshots 1 --udp-send-latest-only true --max-clients 4
 ```
 
+### Live Clients
+
+```bash
+./build/icss_tactical_viewer_gui --host 127.0.0.1 --udp-port 4001
+./build/icss_command_console --backend socket_live --host 127.0.0.1 --tcp-port 4000
+```
+
+`icss_tactical_viewer_gui` is not just a position plot. The window emphasizes:
+- the current mission phase/state-machine step
+- the latest authoritative server decision or rejection reason via a compact status badge and `Authoritative Status` panel
+- resilience/telemetry state (`fresh`, `degraded`, `resync`, `stale`)
+- a terminal-style server event log
+- the tactical picture with target/interceptor geometry as supporting context
+- a denser 24x16 world grid and time-dependent movement rather than a tiny fixed board
+- time-of-command outcome branching: the same scenario can end in `intercept_success` or `timeout_observed` depending on timing and kinematics
+
+Defaults:
+- `icss_server --backend socket_live` uses `json` TCP framing unless `--tcp-frame-format` overrides it
+- `icss_tactical_viewer_gui` and `icss_command_console` now default to the same `json` framing
+- if the server uses `--tcp-frame-format binary`, pass `--tcp-frame-format binary` to the GUI viewer and command console too
+
+For a manual live run:
+1. start `icss_server --backend socket_live --run-forever`
+2. start `icss_tactical_viewer_gui`
+3. run `icss_command_console --backend socket_live ...` to drive the scripted command flow
+
+### One-Command Live Demo
+
+```bash
+./scripts/run_live_demo.sh
+```
+
+Default behavior:
+- starts `icss_server --backend socket_live --run-forever`
+- starts `icss_tactical_viewer_gui`
+- leaves control to the GUI panel
+- GUI live control order: `Start -> Track -> Activate -> Command -> Stop -> Reset -> Start`
+- `Review` is intentionally separate from the live control chain; request it after judgment/archive to inspect server-side AAR data
+- the bottom timeline panel now shows live server events plus control acknowledgements; `Review` switches that panel into post-action review mode
+- the GUI highlights mission phase, authoritative decision state, and resilience telemetry while you step through the flow
+
+For a fully scripted visible run:
+
+```bash
+./scripts/run_live_demo.sh --scripted
+```
+
+Headless mode also runs the scripted command console flow automatically and prints the artifact summary when it completes.
+
+Useful options:
+
+```bash
+./scripts/run_live_demo.sh --frame-format json
+./scripts/run_live_demo.sh --tcp-port 0 --udp-port 0
+./scripts/run_live_demo.sh --headless --viewer-duration-ms 1500
+```
+
 ### Artifact Summary
 
 ```bash
@@ -146,8 +203,9 @@ ctest --test-dir build --output-on-failure
 - `common/include/icss/core/` — shared session/domain types and simulation API
 - `common/src/` — config loader, transport backends, runtime orchestration, simulation runtime, AAR writer, ASCII tactical viewer renderer
 - `server/src/main.cpp` — authoritative reference entrypoint
-- `clients/command-console/src/main.cpp` — command console reference flow
+- `clients/command-console/src/main.cpp` — command console reference flow and socket-live client path
 - `clients/tactical-viewer/src/main.cpp` — minimal 2D tactical viewer reference flow
+- `clients/tactical-viewer-gui/src/main.cpp` — SDL-based live tactical viewer window
 - `tests/protocol/src/protocol_smoke.cpp` — protocol smoke verification
 - `tests/protocol/src/payload_codec_smoke.cpp` — payload serialization regression
 - `tests/protocol/src/frame_codec_smoke.cpp` — JSON/binary frame codec regression

@@ -7,7 +7,7 @@ Role:
 - support AAR playback cursor visualization
 
 Required elements:
-- target / asset position icons
+- target / interceptor position icons
 - tracking status
 - tracking confidence
 - connection status
@@ -17,7 +17,7 @@ Required elements:
 - last snapshot timestamp
 - event log panel
 - AAR playback cursor
-- asset status / command lifecycle / judgment state
+- interceptor status / command lifecycle / judgment state
 
 Non-goals:
 - direct-control interaction loops
