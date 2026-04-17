@@ -16,7 +16,7 @@ Entities:
 State:
 - tracking=on (confidence=82%), asset_status=complete, command_status=completed, judgment=intercept_success
 Telemetry:
-- connection=connected, tick=3, latency_ms=43, packet_loss=0, last_snapshot_ms=1776327004000
+- connection=connected, freshness=fresh, snapshot_sequence=8, tick=3, latency_ms=43, packet_loss_pct=0.0, last_snapshot_ms=1776327004000
 AAR:
 - cursor_index=11/12
 Recent events:
