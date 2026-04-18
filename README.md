@@ -143,7 +143,8 @@ ctest --test-dir build --output-on-failure
 - resilience/telemetry state (`fresh`, `degraded`, `resync`, `stale`)
 - a terminal-style server event log
 - the tactical picture with target/interceptor geometry as supporting context
-- a denser 24x16 world grid and time-dependent movement rather than a tiny fixed board
+- a dense 576x384 world-space picture rather than a tiny fixed board
+- target/interceptor velocity, heading, predicted intercept point, TTI, and seeker/FOV state
 - time-of-command outcome branching: the same scenario can end in `intercept_success` or `timeout_observed` depending on timing and kinematics
 
 Defaults:

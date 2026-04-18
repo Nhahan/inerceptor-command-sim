@@ -52,6 +52,8 @@ Current verification covers:
 - user-facing viewer text now presents the asset as an interceptor
 - the GUI exposes scenario profile controls and a dense world-space tactical map
 - a GUI profile smoke verifies that selecting the timeout profile changes parameters and produces `timeout_observed`
+- the simulation now emits continuous world-space positions, velocity/heading metadata, predicted intercept data, and seeker/FOV state
+- the oversized GUI translation unit was split into focused support/network/control/render modules without changing behavior
 - process-level live smoke verifies artifact/log generation for executable live mode
 - long-running live mode handles signal-driven shutdown and flushes outputs
 - startup output exposes current viewer state and idle/no-snapshot conditions

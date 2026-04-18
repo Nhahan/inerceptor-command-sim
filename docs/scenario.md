@@ -19,8 +19,9 @@ Use one representative training/control scenario.
 - shows multi-client visibility
 - can generate meaningful AAR output
 - can survive at least one abnormal network case in validation coverage
-- uses a denser 24x16 world rather than a toy-sized board
+- uses a dense 576x384 world-space rather than a toy-sized board
 - keeps target/interceptor motion live over time so waiting changes the geometry
+- exposes velocity, heading, predicted intercept point, TTI, and seeker/FOV state
 - can branch between `intercept_success` and `timeout_observed` based on timing and kinematics
 
 ## State Flow
