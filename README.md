@@ -135,6 +135,7 @@ ctest --test-dir build --output-on-failure
 ```bash
 ./build/icss_tactical_viewer_gui --host 127.0.0.1 --udp-port 4001
 ./build/icss_command_console --backend socket_live --host 127.0.0.1 --tcp-port 4000
+./build/icss_command_console --backend socket_live --host 127.0.0.1 --tcp-port 4000 --repo-root /path/to/repo-root
 ```
 
 `icss_tactical_viewer_gui` is not just a position plot. The window emphasizes:
@@ -145,12 +146,16 @@ ctest --test-dir build --output-on-failure
 - the tactical picture with target/interceptor geometry as supporting context
 - a dense 576x384 world-space picture rather than a tiny fixed board
 - target/interceptor velocity, heading, predicted intercept point, TTI, and seeker/FOV state
+- covariance-driven track quality, measurement age, and missed-update state instead of a fixed tracking percentage
 - time-of-command outcome branching: the same scenario can end in `intercept_success` or `timeout_observed` depending on timing and kinematics
 
 Defaults:
 - `icss_server --backend socket_live` uses `json` TCP framing unless `--tcp-frame-format` overrides it
 - `icss_tactical_viewer_gui` and `icss_command_console` now default to the same `json` framing
+- `icss_tactical_viewer_gui` now defaults to a 100 ms heartbeat interval so live progression does not stall waiting on viewer keepalive traffic
 - if the server uses `--tcp-frame-format binary`, pass `--tcp-frame-format binary` to the GUI viewer and command console too
+- `icss_command_console` can use `--repo-root` to load the same scenario config as the server before sending `scenario_start`
+- `run_live_demo.sh` forwards `--runtime-root` to the command console, so a custom runtime config changes both server and console behavior instead of only the server
 
 For a manual live run:
 1. start `icss_server --backend socket_live --run-forever`
@@ -161,6 +166,15 @@ For a manual live run:
 
 ```bash
 ./scripts/run_live_demo.sh
+```
+
+`run_live_demo.sh` now does two defensive things by default:
+- configures/builds the required demo binaries before launch
+- kills existing repo-local `icss_server`, `icss_tactical_viewer_gui`, and `icss_command_console` processes so you do not end up looking at an old window or stale server
+
+Opt out only if you need it:
+```bash
+./scripts/run_live_demo.sh --skip-build --preserve-existing
 ```
 
 Default behavior:

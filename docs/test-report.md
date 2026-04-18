@@ -50,8 +50,16 @@ Current verification covers:
 - the GUI routes review output through the bottom log panel, avoiding overlap with the live authoritative-decision panel
 - the GUI live timeline now includes control acknowledgements alongside server events so the log panel remains useful before the next telemetry update
 - user-facing viewer text now presents the asset as an interceptor
-- the GUI exposes scenario profile controls and a dense world-space tactical map
-- a GUI profile smoke verifies that selecting the timeout profile changes parameters and produces `timeout_observed`
+- the GUI exposes direct scenario parameter controls and a dense world-space tactical map
+- a GUI parameter smoke verifies that direct timeout/speed adjustments change parameters and produce `timeout_observed`
+- a dedicated GUI setup smoke verifies that editing setup during a live run only changes the next-start plan and does not rewrite the active scenario state
+- tracking confidence is now covariance-driven and exposed with measurement age / missed-update state in viewer output and payloads
+- a dedicated GUI auto-rejoin smoke verifies that the viewer can recover from a timeout by reissuing `session_join`
+- a dedicated GUI repo-root smoke verifies that the setup panel preloads scenario parameters from the provided runtime config root
+- the command console now loads scenario-start parameters from `--repo-root` config instead of falling back to baked defaults
+- the one-command live demo script now configures/builds required binaries and clears repo-local stale demo processes before launch
+- the live demo smoke now mutates the runtime-root scenario config to prove the script forwards that config path through to the command console
+- the GUI viewer now defaults to a 100 ms heartbeat interval so live socket demo progression is not lost to stale viewer keepalive timing
 - the simulation now emits continuous world-space positions, velocity/heading metadata, predicted intercept data, and seeker/FOV state
 - the oversized GUI translation unit was split into focused support/network/control/render modules without changing behavior
 - process-level live smoke verifies artifact/log generation for executable live mode
@@ -76,6 +84,7 @@ Current verification covers:
 - replay cursor stepping is verified against viewer output
 - resilience/replay rendering behavior passes smoke verification
 - live viewer heartbeat timeout behavior is verified against the socket backend
+- telemetry payloads now align event summaries to the snapshot tick they accompany, and a dedicated smoke verifies that alignment
 - live viewer freshness transitions are verified against the socket backend
 - degraded freshness under packet loss is verified in rendered output
 - live snapshot batching/filtering is verified against the socket backend
@@ -84,7 +93,7 @@ Current verification covers:
 
 - configure: passed
 - build: passed
-- test: passed (`36/36` tests)
+- test: passed (`44/44` tests)
 - runtime smoke: passed (`icss_server`, `icss_command_console`, `icss_tactical_viewer`)
 - cli smoke: passed (`server_inprocess_cli_smoke`, `server_socket_live_cli_smoke`)
 - idle cli smoke: passed (`server_socket_live_idle_cli_smoke`)
