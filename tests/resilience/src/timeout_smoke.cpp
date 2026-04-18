@@ -30,5 +30,21 @@ int main() {
         icss::view::make_replay_cursor(events.size(), events.empty() ? 0 : events.size() - 1));
     assert(frame.find("connection=timed_out") != std::string::npos);
     assert(frame.find("freshness=stale") != std::string::npos);
+
+    SimulationSession reset_session;
+    reset_session.connect_client(ClientRole::CommandConsole, 101U);
+    reset_session.reset_session("idle reset");
+    const auto idle_frame = icss::view::render_tactical_frame(
+        reset_session.latest_snapshot(),
+        reset_session.events(),
+        icss::view::make_replay_cursor(reset_session.events().size(),
+                                       reset_session.events().empty() ? 0 : reset_session.events().size() - 1));
+    const auto entities_pos = idle_frame.find("Entities:\n");
+    assert(entities_pos != std::string::npos);
+    const auto grid_start = idle_frame.find('\n');
+    assert(grid_start != std::string::npos);
+    const auto grid_block = idle_frame.substr(grid_start + 1, entities_pos - (grid_start + 1));
+    assert(grid_block.find('T') == std::string::npos);
+    assert(grid_block.find('A') == std::string::npos);
     return 0;
 }

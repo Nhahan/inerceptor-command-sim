@@ -38,6 +38,52 @@ std::string escape_json(std::string_view input) {
     return escaped;
 }
 
+void drive_baseline_transport_sequence(icss::net::TransportBackend& transport, const icss::core::RuntimeConfig& config) {
+    transport.connect_client(icss::core::ClientRole::CommandConsole, 101U);
+    transport.connect_client(icss::core::ClientRole::TacticalViewer, 201U);
+    if (!transport.start_scenario().accepted) {
+        throw std::runtime_error("baseline start_scenario rejected");
+    }
+    if (!transport.dispatch(icss::protocol::TrackRequestPayload{{1001U, 101U, 1U}, "target-alpha"}).accepted) {
+        throw std::runtime_error("baseline track_request rejected");
+    }
+    transport.advance_tick();
+    if (!transport.dispatch(icss::protocol::AssetActivatePayload{{1001U, 101U, 2U}, "asset-interceptor"}).accepted) {
+        throw std::runtime_error("baseline asset_activate rejected");
+    }
+    transport.disconnect_client(icss::core::ClientRole::TacticalViewer, "viewer reconnect exercised for resilience evidence");
+    transport.connect_client(icss::core::ClientRole::TacticalViewer, 201U);
+    if (!transport.dispatch(icss::protocol::CommandIssuePayload{{1001U, 101U, 3U}, "asset-interceptor", "target-alpha"}).accepted) {
+        throw std::runtime_error("baseline command_issue rejected");
+    }
+    for (int i = 0; i < config.scenario.engagement_timeout_ticks && !transport.latest_snapshot().judgment.ready; ++i) {
+        transport.advance_tick();
+    }
+}
+
+void drive_baseline_session_sequence(icss::core::SimulationSession& session, const icss::core::RuntimeConfig& config) {
+    session.connect_client(icss::core::ClientRole::CommandConsole, 101U);
+    session.connect_client(icss::core::ClientRole::TacticalViewer, 201U);
+    if (!session.start_scenario().accepted) {
+        throw std::runtime_error("baseline start_scenario rejected");
+    }
+    if (!session.request_track().accepted) {
+        throw std::runtime_error("baseline track_request rejected");
+    }
+    session.advance_tick();
+    if (!session.activate_asset().accepted) {
+        throw std::runtime_error("baseline asset_activate rejected");
+    }
+    session.disconnect_client(icss::core::ClientRole::TacticalViewer, "viewer reconnect exercised for resilience evidence");
+    session.connect_client(icss::core::ClientRole::TacticalViewer, 201U);
+    if (!session.issue_command().accepted) {
+        throw std::runtime_error("baseline command_issue rejected");
+    }
+    for (int i = 0; i < config.scenario.engagement_timeout_ticks && !session.latest_snapshot().judgment.ready; ++i) {
+        session.advance_tick();
+    }
+}
+
 }  // namespace
 
 BaselineRuntime::BaselineRuntime(RuntimeConfig config)
@@ -49,18 +95,7 @@ const RuntimeConfig& BaselineRuntime::config() const {
 
 RuntimeResult BaselineRuntime::run() const {
     auto transport = icss::net::make_transport(icss::net::BackendKind::InProcess, config_);
-    transport->connect_client(ClientRole::CommandConsole, 101U);
-    transport->connect_client(ClientRole::TacticalViewer, 201U);
-    transport->start_scenario();
-    transport->dispatch(icss::protocol::TrackRequestPayload{{1001U, 101U, 1U}, "target-alpha"});
-    transport->advance_tick();
-    transport->dispatch(icss::protocol::AssetActivatePayload{{1001U, 101U, 2U}, "asset-interceptor"});
-    transport->disconnect_client(ClientRole::TacticalViewer, "viewer reconnect exercised for resilience evidence");
-    transport->connect_client(ClientRole::TacticalViewer, 201U);
-    transport->dispatch(icss::protocol::CommandIssuePayload{{1001U, 101U, 3U}, "asset-interceptor", "target-alpha"});
-    for (int i = 0; i < config_.scenario.engagement_timeout_ticks && !transport->latest_snapshot().judgment.ready; ++i) {
-        transport->advance_tick();
-    }
+    drive_baseline_transport_sequence(*transport, config_);
     transport->archive_session();
 
     const auto summary = transport->summary();
@@ -82,18 +117,15 @@ RuntimeConfig default_runtime_config(const std::filesystem::path& repo_root) {
 
 SimulationSession run_baseline_demo(const RuntimeConfig& config) {
     SimulationSession session(1001, config.server.tick_rate_hz, config.scenario.telemetry_interval_ms, config.scenario);
-    session.connect_client(ClientRole::CommandConsole, 101U);
-    session.connect_client(ClientRole::TacticalViewer, 201U);
-    session.start_scenario();
-    session.request_track();
-    session.advance_tick();
-    session.activate_asset();
-    session.disconnect_client(ClientRole::TacticalViewer, "viewer reconnect exercised for resilience evidence");
-    session.connect_client(ClientRole::TacticalViewer, 201U);
-    session.issue_command();
-    for (int i = 0; i < config.scenario.engagement_timeout_ticks && !session.latest_snapshot().judgment.ready; ++i) {
-        session.advance_tick();
-    }
+    drive_baseline_session_sequence(session, config);
+    session.archive_session();
+    return session;
+}
+
+SimulationSession run_baseline_demo() {
+    RuntimeConfig config;
+    SimulationSession session(1001, config.server.tick_rate_hz, config.scenario.telemetry_interval_ms, config.scenario);
+    drive_baseline_session_sequence(session, config);
     session.archive_session();
     return session;
 }

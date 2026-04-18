@@ -60,5 +60,23 @@ int main() {
     assert(late.latest_snapshot().judgment.ready);
     assert(late.latest_snapshot().judgment.code == JudgmentCode::TimeoutObserved);
     assert(late.latest_snapshot().predicted_intercept_valid);
+
+    ScenarioConfig bounce_scenario = scenario;
+    bounce_scenario.world_width = 24;
+    bounce_scenario.world_height = 24;
+    bounce_scenario.target_start_x = 22;
+    bounce_scenario.target_start_y = 12;
+    bounce_scenario.target_velocity_x = 5;
+    bounce_scenario.target_velocity_y = 0;
+
+    SimulationSession bounce(1003U, 20, 200, bounce_scenario);
+    bounce.connect_client(ClientRole::CommandConsole, 101U);
+    bounce.connect_client(ClientRole::TacticalViewer, 201U);
+    assert(bounce.start_scenario().accepted);
+    bounce.advance_tick();
+    const auto bounce_snapshot = bounce.latest_snapshot();
+    assert(bounce_snapshot.target_velocity_x < 0);
+    assert(bounce_snapshot.target_velocity.x < 0.0F);
+    assert(bounce_snapshot.target_heading_deg > 170.0F || bounce_snapshot.target_heading_deg < -170.0F);
     return 0;
 }

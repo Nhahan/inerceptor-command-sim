@@ -2,327 +2,24 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <stdexcept>
 
-#include "icss/view/ascii_tactical_view.hpp"
+#include "simulation_internal.hpp"
 
 namespace icss::core {
-namespace {
-
-constexpr std::string_view kReplayTimelineSchemaVersion = "icss-replay-timeline-v1";
-constexpr std::string_view kSessionSummarySchemaVersion = "icss-session-summary-v1";
-constexpr std::string_view kSessionSummaryJsonSchemaVersion = "icss-session-summary-json-v1";
-constexpr std::string_view kSampleOutputSchemaVersion = "icss-sample-output-v1";
-
-std::string escape_json(std::string_view input) {
-    std::string escaped;
-    escaped.reserve(input.size());
-    for (char ch : input) {
-        switch (ch) {
-        case '\\': escaped += "\\\\"; break;
-        case '"': escaped += "\\\""; break;
-        case '\n': escaped += "\\n"; break;
-        default: escaped += ch; break;
-        }
-    }
-    return escaped;
-}
-
-std::vector<EventRecord> recent_events_for_artifact(const std::vector<EventRecord>& events) {
-    std::vector<EventRecord> recent;
-    const auto start = events.size() > 4 ? events.size() - 4 : 0;
-    for (std::size_t index = start; index < events.size(); ++index) {
-        recent.push_back(events[index]);
-    }
-    return recent;
-}
-
-float clampf(float value, float lo, float hi) {
-    return std::max(lo, std::min(value, hi));
-}
-
-void bounce_world_axis(float& position, float& velocity, float limit) {
-    if (limit <= 1.0F || velocity == 0.0F) {
-        position = clampf(position, 0.0F, std::max(0.0F, limit - 1.0F));
-        return;
-    }
-    position += velocity;
-    if (position < 0.0F) {
-        position = -position;
-        velocity *= -1.0F;
-    } else if (position > limit - 1.0F) {
-        position = (limit - 1.0F) - (position - (limit - 1.0F));
-        velocity *= -1.0F;
-    }
-    position = clampf(position, 0.0F, limit - 1.0F);
-}
-
-float length(Vec2f v) {
-    return std::sqrt(v.x * v.x + v.y * v.y);
-}
-
-Vec2f subtract(Vec2f a, Vec2f b) {
-    return {a.x - b.x, a.y - b.y};
-}
-
-Vec2f add(Vec2f a, Vec2f b) {
-    return {a.x + b.x, a.y + b.y};
-}
-
-Vec2f scale(Vec2f v, float s) {
-    return {v.x * s, v.y * s};
-}
-
-Vec2f normalize(Vec2f v) {
-    const auto len = length(v);
-    if (len <= 1e-5F) {
-        return {0.0F, 0.0F};
-    }
-    return {v.x / len, v.y / len};
-}
-
-float heading_deg(Vec2f v) {
-    if (std::abs(v.x) <= 1e-5F && std::abs(v.y) <= 1e-5F) {
-        return 0.0F;
-    }
-    return std::atan2(v.y, v.x) * 180.0F / 3.1415926535F;
-}
-
-float normalize_angle_deg(float value) {
-    while (value > 180.0F) value -= 360.0F;
-    while (value < -180.0F) value += 360.0F;
-    return value;
-}
-
-}  // namespace
-
-SimulationSession::SimulationSession(std::uint32_t session_id,
-                                     int tick_rate_hz,
-                                     int telemetry_interval_ms,
-                                     ScenarioConfig scenario)
-    : session_id_(session_id),
-      tick_rate_hz_(tick_rate_hz),
-      telemetry_interval_ms_(telemetry_interval_ms),
-      scenario_(std::move(scenario)),
-    target_({"target-alpha", {scenario_.target_start_x, scenario_.target_start_y}, false}),
-    asset_({"asset-interceptor", {scenario_.interceptor_start_x, scenario_.interceptor_start_y}, false}),
-    target_world_({static_cast<float>(scenario_.target_start_x), static_cast<float>(scenario_.target_start_y)}),
-    asset_world_({static_cast<float>(scenario_.interceptor_start_x), static_cast<float>(scenario_.interceptor_start_y)}),
-    target_velocity_world_({static_cast<float>(scenario_.target_velocity_x), static_cast<float>(scenario_.target_velocity_y)}),
-      asset_velocity_world_({0.0F, 0.0F}),
-      seeker_lock_(false),
-      off_boresight_deg_(0.0F) {}
-
-void SimulationSession::connect_client(ClientRole role, std::uint32_t sender_id) {
-    auto& state = client(role);
-    const auto reconnecting = state.has_connected_before;
-    state.sender_id = sender_id;
-    state.last_seen_tick = tick_;
-    state.has_connected_before = true;
-    state.connection = reconnecting ? ConnectionState::Reconnected : ConnectionState::Connected;
-    if (reconnecting) {
-        reconnect_exercised_ = true;
-        push_event(protocol::EventType::ClientReconnected,
-                   to_string(role),
-                   {},
-                   "Client reconnected",
-                   "Client resumed control-plane visibility and should resync on the next snapshot.");
-        push_event(protocol::EventType::ResilienceTriggered,
-                   "simulation_server",
-                   {},
-                   "Reconnect/resync path exercised",
-                   "The baseline resilience case uses reconnect + latest-snapshot convergence.");
-    } else {
-        push_event(protocol::EventType::ClientJoined,
-                   to_string(role),
-                   {},
-                   "Client joined session",
-                   "Client registered before scenario activity.");
-    }
-}
-
-void SimulationSession::disconnect_client(ClientRole role, std::string reason) {
-    auto& state = client(role);
-    state.connection = ConnectionState::Disconnected;
-    push_event(protocol::EventType::ClientLeft,
-               to_string(role),
-               {},
-               "Client disconnected",
-               std::move(reason));
-}
-
-void SimulationSession::timeout_client(ClientRole role, std::string reason) {
-    auto& state = client(role);
-    state.connection = ConnectionState::TimedOut;
-    timeout_exercised_ = true;
-    push_event(protocol::EventType::ResilienceTriggered,
-               "simulation_server",
-               {},
-               "Client timeout exercised",
-               std::move(reason));
-    record_snapshot();
-}
-
-CommandResult SimulationSession::start_scenario() {
-    if (command_console_.connection == ConnectionState::Disconnected) {
-        return reject_command("Scenario start rejected",
-                              "command console must connect before starting the scenario");
-    }
-    if (phase_ != SessionPhase::Initialized) {
-        return reject_command("Scenario start rejected",
-                              "scenario can only be started from initialized state");
-    }
-    phase_ = SessionPhase::Detecting;
-    target_.active = true;
-    track_ = {};
-    asset_status_ = AssetStatus::Idle;
-    command_status_ = CommandLifecycle::None;
-    judgment_ = {};
-    push_event(protocol::EventType::SessionStarted,
-               "simulation_server",
-               {target_.id},
-               "Scenario started",
-               "The authoritative loop is now in detecting state.");
-    record_snapshot();
-    return {true, "scenario started", protocol::TcpMessageKind::ScenarioStart};
-}
-
-void SimulationSession::configure_scenario(ScenarioConfig scenario) {
-    scenario_ = std::move(scenario);
-    target_world_ = {static_cast<float>(scenario_.target_start_x), static_cast<float>(scenario_.target_start_y)};
-    asset_world_ = {static_cast<float>(scenario_.interceptor_start_x), static_cast<float>(scenario_.interceptor_start_y)};
-    target_velocity_world_ = {static_cast<float>(scenario_.target_velocity_x), static_cast<float>(scenario_.target_velocity_y)};
-    asset_velocity_world_ = {0.0F, 0.0F};
-    seeker_lock_ = false;
-    off_boresight_deg_ = 0.0F;
-    target_.position = {scenario_.target_start_x, scenario_.target_start_y};
-    target_.active = false;
-    asset_.position = {scenario_.interceptor_start_x, scenario_.interceptor_start_y};
-    asset_.active = false;
-    track_ = {};
-    asset_status_ = AssetStatus::Idle;
-    command_status_ = CommandLifecycle::None;
-    judgment_ = {};
-    engagement_started_tick_.reset();
-}
-
-CommandResult SimulationSession::reset_session(std::string) {
-    tick_ = 0;
-    sequence_ = 0;
-    clock_ms_ = 1'776'327'000'000ULL;
-    phase_ = SessionPhase::Initialized;
-    target_world_ = {static_cast<float>(scenario_.target_start_x), static_cast<float>(scenario_.target_start_y)};
-    asset_world_ = {static_cast<float>(scenario_.interceptor_start_x), static_cast<float>(scenario_.interceptor_start_y)};
-    target_velocity_world_ = {static_cast<float>(scenario_.target_velocity_x), static_cast<float>(scenario_.target_velocity_y)};
-    asset_velocity_world_ = {0.0F, 0.0F};
-    seeker_lock_ = false;
-    off_boresight_deg_ = 0.0F;
-    target_ = {"target-alpha", {scenario_.target_start_x, scenario_.target_start_y}, false};
-    asset_ = {"asset-interceptor", {scenario_.interceptor_start_x, scenario_.interceptor_start_y}, false};
-    track_ = {};
-    asset_status_ = AssetStatus::Idle;
-    command_status_ = CommandLifecycle::None;
-    judgment_ = {};
-    engagement_started_tick_.reset();
-    reconnect_exercised_ = false;
-    timeout_exercised_ = false;
-    packet_gap_exercised_ = false;
-    events_.clear();
-    snapshots_.clear();
-    if (command_console_.connection == ConnectionState::Reconnected) {
-        command_console_.connection = ConnectionState::Connected;
-    }
-    if (tactical_viewer_.connection == ConnectionState::Reconnected) {
-        tactical_viewer_.connection = ConnectionState::Connected;
-    }
-    command_console_.last_seen_tick = 0;
-    tactical_viewer_.last_seen_tick = 0;
-    record_snapshot();
-    return {true, "session reset to initialized state", protocol::TcpMessageKind::CommandAck};
-}
-
-CommandResult SimulationSession::request_track() {
-    if (phase_ != SessionPhase::Detecting) {
-        return reject_command("Track request rejected",
-                              "track request is only valid while detecting",
-                              {target_.id});
-    }
-    track_.active = true;
-    track_.confidence_pct = 82;
-    phase_ = SessionPhase::Tracking;
-    push_event(protocol::EventType::TrackUpdated,
-               "command_console",
-               {target_.id},
-               "Track request accepted",
-               "Target is now actively tracked by the server.");
-    record_snapshot();
-    return {true, "track accepted", protocol::TcpMessageKind::TrackRequest};
-}
-
-CommandResult SimulationSession::activate_asset() {
-    if (phase_ != SessionPhase::Tracking) {
-        return reject_command("Interceptor activation rejected",
-                              "interceptor activation is only valid while tracking",
-                              {asset_.id});
-    }
-    if (!track_.active) {
-        return reject_command("Interceptor activation rejected",
-                              "interceptor activation requires an active track",
-                              {asset_.id});
-    }
-    asset_status_ = AssetStatus::Ready;
-    asset_.active = true;
-    phase_ = SessionPhase::AssetReady;
-    push_event(protocol::EventType::AssetUpdated,
-               "command_console",
-               {asset_.id},
-               "Interceptor activation accepted",
-               "Interceptor is ready for command issue.");
-    record_snapshot();
-    return {true, "interceptor ready", protocol::TcpMessageKind::AssetActivate};
-}
-
-CommandResult SimulationSession::issue_command() {
-    if (phase_ != SessionPhase::AssetReady) {
-        return reject_command("Command rejected",
-                              "command issue is only valid while asset_ready",
-                              {asset_.id, target_.id});
-    }
-    if (asset_status_ != AssetStatus::Ready) {
-        return reject_command("Command rejected",
-                              "command issue requires asset_ready state",
-                              {asset_.id, target_.id});
-    }
-    command_status_ = CommandLifecycle::Accepted;
-    phase_ = SessionPhase::CommandIssued;
-    engagement_started_tick_ = tick_;
-    push_event(protocol::EventType::CommandAccepted,
-               "command_console",
-               {asset_.id, target_.id},
-               "Command accepted",
-               "Authoritative server accepted the operator command for judgment.");
-    record_snapshot();
-    return {true, "command accepted", protocol::TcpMessageKind::CommandAck};
-}
-
-CommandResult SimulationSession::record_transport_rejection(std::string summary,
-                                                            std::string reason,
-                                                            std::vector<std::string> entity_ids) {
-    return reject_command(std::move(summary), std::move(reason), std::move(entity_ids));
-}
 
 void SimulationSession::advance_tick() {
     ++tick_;
 
     if (target_.active) {
-        bounce_world_axis(target_world_.x, target_velocity_world_.x, static_cast<float>(scenario_.world_width));
-        bounce_world_axis(target_world_.y, target_velocity_world_.y, static_cast<float>(scenario_.world_height));
+        detail::bounce_world_axis(target_world_.x, target_velocity_world_.x, static_cast<float>(scenario_.world_width));
+        detail::bounce_world_axis(target_world_.y, target_velocity_world_.y, static_cast<float>(scenario_.world_height));
         target_.position.x = static_cast<int>(std::lround(target_world_.x));
         target_.position.y = static_cast<int>(std::lround(target_world_.y));
+    }
+
+    if (track_.active) {
+        update_track_state();
     }
 
     if (command_status_ == CommandLifecycle::Accepted && phase_ == SessionPhase::CommandIssued) {
@@ -332,35 +29,44 @@ void SimulationSession::advance_tick() {
     }
 
     if (phase_ == SessionPhase::Engaging && asset_.active) {
-        const auto to_target = subtract(target_world_, asset_world_);
-        const auto distance = length(to_target);
+        const auto to_target = detail::subtract(target_world_, asset_world_);
+        const auto distance = detail::length(to_target);
         const auto interceptor_max_speed = static_cast<float>(scenario_.interceptor_speed_per_tick);
         const auto interceptor_accel = std::max(1.0F, interceptor_max_speed * 0.28F);
         const auto tti_guess = distance / std::max(0.1F, interceptor_max_speed);
-        const auto predicted_intercept = add(target_world_, scale(target_velocity_world_, tti_guess));
-        const auto desired_velocity = scale(normalize(subtract(predicted_intercept, asset_world_)), interceptor_max_speed);
-        const auto velocity_error = subtract(desired_velocity, asset_velocity_world_);
-        const auto accel_step = scale(normalize(velocity_error), std::min(interceptor_accel, length(velocity_error)));
-        asset_velocity_world_ = add(asset_velocity_world_, accel_step);
-        const auto speed = length(asset_velocity_world_);
+        const auto predicted_intercept = detail::add(target_world_, detail::scale(target_velocity_world_, tti_guess));
+        const auto desired_velocity = detail::scale(detail::normalize(detail::subtract(predicted_intercept, asset_world_)), interceptor_max_speed);
+        const auto velocity_error = detail::subtract(desired_velocity, asset_velocity_world_);
+        const auto accel_step = detail::scale(detail::normalize(velocity_error), std::min(interceptor_accel, detail::length(velocity_error)));
+        asset_velocity_world_ = detail::add(asset_velocity_world_, accel_step);
+        const auto speed = detail::length(asset_velocity_world_);
         if (speed > interceptor_max_speed) {
-            asset_velocity_world_ = scale(normalize(asset_velocity_world_), interceptor_max_speed);
+            asset_velocity_world_ = detail::scale(detail::normalize(asset_velocity_world_), interceptor_max_speed);
         }
-        asset_world_ = add(asset_world_, asset_velocity_world_);
-        asset_world_.x = clampf(asset_world_.x, 0.0F, static_cast<float>(scenario_.world_width - 1));
-        asset_world_.y = clampf(asset_world_.y, 0.0F, static_cast<float>(scenario_.world_height - 1));
+        asset_world_ = detail::add(asset_world_, asset_velocity_world_);
+        asset_world_.x = detail::clampf(asset_world_.x, 0.0F, static_cast<float>(scenario_.world_width - 1));
+        asset_world_.y = detail::clampf(asset_world_.y, 0.0F, static_cast<float>(scenario_.world_height - 1));
         asset_.position.x = static_cast<int>(std::lround(asset_world_.x));
         asset_.position.y = static_cast<int>(std::lround(asset_world_.y));
     }
 
     {
-        const auto los = subtract(target_world_, asset_world_);
-        off_boresight_deg_ = std::abs(normalize_angle_deg(heading_deg(los) - heading_deg(asset_velocity_world_)));
-        seeker_lock_ = length(los) > 0.0F && off_boresight_deg_ <= static_cast<float>(scenario_.seeker_fov_deg);
+        const bool engagement_context = asset_.active
+            && (command_status_ == CommandLifecycle::Accepted
+                || command_status_ == CommandLifecycle::Executing
+                || command_status_ == CommandLifecycle::Completed);
+        if (engagement_context) {
+            const auto los = detail::subtract(target_world_, asset_world_);
+            off_boresight_deg_ = std::abs(detail::normalize_angle_deg(detail::heading_deg(los) - detail::heading_deg(asset_velocity_world_)));
+            seeker_lock_ = detail::length(los) > 0.0F && off_boresight_deg_ <= static_cast<float>(scenario_.seeker_fov_deg);
+        } else {
+            off_boresight_deg_ = 0.0F;
+            seeker_lock_ = false;
+        }
     }
 
     if (command_status_ == CommandLifecycle::Executing && phase_ == SessionPhase::Engaging) {
-        const auto distance = length(subtract(target_world_, asset_world_));
+        const auto distance = detail::length(detail::subtract(target_world_, asset_world_));
         const auto engagement_ticks = engagement_started_tick_.has_value() ? tick_ - *engagement_started_tick_ : 0;
         if (distance <= static_cast<float>(scenario_.intercept_radius)) {
             judgment_.ready = true;
@@ -405,288 +111,5 @@ void SimulationSession::advance_tick() {
     record_snapshot(packet_loss);
 }
 
-void SimulationSession::archive_session() {
-    phase_ = SessionPhase::Archived;
-    push_event(protocol::EventType::SessionEnded,
-               "simulation_server",
-               {target_.id, asset_.id},
-               "Session archived",
-               "Scenario completed and artifacts are ready for AAR review.");
-    record_snapshot();
-}
-
-SessionPhase SimulationSession::phase() const {
-    return phase_;
-}
-
-const std::vector<EventRecord>& SimulationSession::events() const {
-    return events_;
-}
-
-const std::vector<Snapshot>& SimulationSession::snapshots() const {
-    return snapshots_;
-}
-
-Snapshot SimulationSession::latest_snapshot() const {
-    if (snapshots_.empty()) {
-        throw std::runtime_error("no snapshots recorded yet");
-    }
-    return snapshots_.back();
-}
-
-SessionSummary SimulationSession::build_summary() const {
-    std::string resilience_case = "none";
-    if (reconnect_exercised_ && packet_gap_exercised_ && timeout_exercised_) {
-        resilience_case = "reconnect_and_resync,udp_snapshot_gap_convergence,timeout_visibility";
-    } else if (reconnect_exercised_ && packet_gap_exercised_) {
-        resilience_case = "reconnect_and_resync,udp_snapshot_gap_convergence";
-    } else if (reconnect_exercised_ && timeout_exercised_) {
-        resilience_case = "reconnect_and_resync,timeout_visibility";
-    } else if (packet_gap_exercised_ && timeout_exercised_) {
-        resilience_case = "udp_snapshot_gap_convergence,timeout_visibility";
-    } else if (reconnect_exercised_) {
-        resilience_case = "reconnect_and_resync";
-    } else if (timeout_exercised_) {
-        resilience_case = "timeout_visibility";
-    } else if (packet_gap_exercised_) {
-        resilience_case = "udp_snapshot_gap_convergence";
-    }
-    return {
-        session_id_,
-        phase_,
-        snapshots_.size(),
-        events_.size(),
-        command_console_.connection,
-        tactical_viewer_.connection,
-        judgment_.ready,
-        judgment_.code,
-        !events_.empty(),
-        events_.empty() ? protocol::EventType::SessionStarted : events_.back().header.event_type,
-        std::move(resilience_case),
-    };
-}
-
-void SimulationSession::write_aar_artifacts(const std::filesystem::path& output_dir) const {
-    std::filesystem::create_directories(output_dir);
-    const auto summary = build_summary();
-
-    std::ofstream timeline(output_dir / "replay-timeline.json");
-    timeline << "{\n";
-    timeline << "  \"schema_version\": \"" << kReplayTimelineSchemaVersion << "\",\n";
-    timeline << "  \"session_id\": \"" << session_id_ << "\",\n";
-    timeline << "  \"final_phase\": \"" << to_string(summary.phase) << "\",\n";
-    timeline << "  \"snapshot_count\": " << summary.snapshot_count << ",\n";
-    timeline << "  \"event_count\": " << summary.event_count << ",\n";
-    timeline << "  \"judgment_code\": \"" << to_string(summary.judgment_code) << "\",\n";
-    timeline << "  \"resilience_case\": \"" << escape_json(summary.resilience_case) << "\",\n";
-    timeline << "  \"events\": [\n";
-    for (std::size_t index = 0; index < events_.size(); ++index) {
-        const auto& event = events_[index];
-        timeline << "    {\n";
-        timeline << "      \"timestamp_ms\": " << event.header.timestamp_ms << ",\n";
-        timeline << "      \"tick\": " << event.header.tick << ",\n";
-        timeline << "      \"event_type\": \"" << protocol::to_string(event.header.event_type) << "\",\n";
-        timeline << "      \"source\": \"" << escape_json(event.source) << "\",\n";
-        timeline << "      \"entity_ids\": [";
-        for (std::size_t entity_index = 0; entity_index < event.entity_ids.size(); ++entity_index) {
-            timeline << "\"" << escape_json(event.entity_ids[entity_index]) << "\"";
-            if (entity_index + 1 != event.entity_ids.size()) {
-                timeline << ", ";
-            }
-        }
-        timeline << "],\n";
-        timeline << "      \"summary\": \"" << escape_json(event.summary) << "\",\n";
-        timeline << "      \"details\": \"" << escape_json(event.details) << "\"\n";
-        timeline << "    }" << (index + 1 == events_.size() ? "\n" : ",\n");
-    }
-    timeline << "  ]\n";
-    timeline << "}\n";
-
-    const auto snapshot = latest_snapshot();
-    const auto recent_events = recent_events_for_artifact(events_);
-
-    std::ofstream summary_json(output_dir / "session-summary.json");
-    summary_json << "{\n";
-    summary_json << "  \"schema_version\": \"" << kSessionSummaryJsonSchemaVersion << "\",\n";
-    summary_json << "  \"session_id\": " << summary.session_id << ",\n";
-    summary_json << "  \"final_phase\": \"" << to_string(summary.phase) << "\",\n";
-    summary_json << "  \"snapshot_count\": " << summary.snapshot_count << ",\n";
-    summary_json << "  \"event_count\": " << summary.event_count << ",\n";
-    summary_json << "  \"command_console_connection\": \"" << to_string(summary.command_console_connection) << "\",\n";
-    summary_json << "  \"viewer_connection\": \"" << to_string(summary.viewer_connection) << "\",\n";
-    summary_json << "  \"judgment_ready\": " << (summary.judgment_ready ? "true" : "false") << ",\n";
-    summary_json << "  \"judgment_code\": \"" << to_string(summary.judgment_code) << "\",\n";
-    summary_json << "  \"last_event_type\": \"" << (summary.has_last_event ? protocol::to_string(summary.last_event_type) : "none") << "\",\n";
-    summary_json << "  \"resilience_case\": \"" << escape_json(summary.resilience_case) << "\",\n";
-    summary_json << "  \"latest_snapshot_sequence\": " << snapshot.header.snapshot_sequence << ",\n";
-    summary_json << "  \"latest_viewer_connection\": \"" << to_string(snapshot.viewer_connection) << "\",\n";
-    summary_json << "  \"latest_freshness\": \"" << view::freshness_label(snapshot) << "\",\n";
-    summary_json << "  \"recent_events\": [\n";
-    for (std::size_t index = 0; index < recent_events.size(); ++index) {
-        const auto& event = recent_events[index];
-        summary_json << "    {\n";
-        summary_json << "      \"tick\": " << event.header.tick << ",\n";
-        summary_json << "      \"event_type\": \"" << protocol::to_string(event.header.event_type) << "\",\n";
-        summary_json << "      \"summary\": \"" << escape_json(event.summary) << "\"\n";
-        summary_json << "    }" << (index + 1 == recent_events.size() ? "\n" : ",\n");
-    }
-    summary_json << "  ]\n";
-    summary_json << "}\n";
-
-    std::ofstream summary_file(output_dir / "session-summary.md");
-    summary_file << "# Sample AAR Session Summary\n\n";
-    summary_file << "## Summary\n\n";
-    summary_file << "- schema_version: " << kSessionSummarySchemaVersion << "\n";
-    summary_file << "- session_id: " << summary.session_id << "\n";
-    summary_file << "- final_phase: " << to_string(summary.phase) << "\n";
-    summary_file << "- snapshot_count: " << summary.snapshot_count << "\n";
-    summary_file << "- event_count: " << summary.event_count << "\n";
-    summary_file << "- command_console_connection: " << to_string(summary.command_console_connection) << "\n";
-    summary_file << "- viewer_connection: " << to_string(summary.viewer_connection) << "\n";
-    summary_file << "- judgment_ready: " << (summary.judgment_ready ? "true" : "false") << "\n";
-    summary_file << "- judgment_code: " << to_string(summary.judgment_code) << "\n";
-    summary_file << "- last_event_type: " << (summary.has_last_event ? protocol::to_string(summary.last_event_type) : "none") << "\n";
-    summary_file << "- resilience_case: " << summary.resilience_case << "\n";
-    summary_file << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
-    summary_file << "- latest_viewer_connection: " << to_string(snapshot.viewer_connection) << "\n";
-    summary_file << "- latest_freshness: " << view::freshness_label(snapshot) << "\n";
-    summary_file << "\n## Recent Events\n\n";
-    for (const auto& event : recent_events) {
-        summary_file << "- [tick " << event.header.tick << "] "
-                     << event.summary << " (" << protocol::to_string(event.header.event_type) << ")\n";
-    }
-}
-
-void SimulationSession::write_example_output(const std::filesystem::path& output_file) const {
-    std::filesystem::create_directories(output_file.parent_path());
-    std::ofstream out(output_file);
-
-    const auto summary = build_summary();
-    const auto snapshot = latest_snapshot();
-    const auto recent_events = recent_events_for_artifact(events_);
-    const auto cursor = view::make_replay_cursor(events_.size(), events_.empty() ? 0 : events_.size() - 1);
-    out << "# Sample Output\n\n";
-    out << "- schema_version: " << kSampleOutputSchemaVersion << "\n";
-    out << "- session_id: " << summary.session_id << "\n";
-    out << "- cursor_index: " << cursor.index << "/" << cursor.total << "\n";
-    out << "- command_console_connection: " << to_string(summary.command_console_connection) << "\n";
-    out << "- viewer_connection: " << to_string(summary.viewer_connection) << "\n";
-    out << "- latest_freshness: " << view::freshness_label(snapshot) << "\n";
-    out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
-    out << "- last_event_type: " << (summary.has_last_event ? protocol::to_string(summary.last_event_type) : "none") << "\n";
-    out << "- resilience_case: " << summary.resilience_case << "\n\n";
-    out << "```text\n";
-    out << view::render_tactical_frame(
-        snapshot,
-        recent_events,
-        cursor);
-    out << "```\n";
-}
-
-std::uint64_t SimulationSession::next_timestamp_ms() {
-    clock_ms_ += static_cast<std::uint64_t>(telemetry_interval_ms_);
-    return clock_ms_;
-}
-
-ClientState& SimulationSession::client(ClientRole role) {
-    return role == ClientRole::CommandConsole ? command_console_ : tactical_viewer_;
-}
-
-const ClientState& SimulationSession::client(ClientRole role) const {
-    return role == ClientRole::CommandConsole ? command_console_ : tactical_viewer_;
-}
-
-void SimulationSession::push_event(protocol::EventType type,
-                                   std::string source,
-                                   std::vector<std::string> entity_ids,
-                                   std::string summary,
-                                   std::string details) {
-    events_.push_back({{tick_, next_timestamp_ms(), type}, std::move(source), std::move(entity_ids), std::move(summary), std::move(details)});
-}
-
-void SimulationSession::record_snapshot(float packet_loss_pct) {
-    ++sequence_;
-    const auto timestamp = next_timestamp_ms();
-    command_console_.last_seen_tick = tick_;
-    tactical_viewer_.last_seen_tick = tick_;
-    const auto viewer_connection = tactical_viewer_.connection;
-    const auto target_heading = heading_deg(target_velocity_world_);
-    const auto asset_heading = heading_deg(asset_velocity_world_);
-    const auto relative = subtract(target_world_, asset_world_);
-    const auto distance = length(relative);
-    const auto max_speed = std::max(0.1F, static_cast<float>(scenario_.interceptor_speed_per_tick));
-    const auto tti = distance / max_speed;
-    const auto predicted = add(target_world_, scale(target_velocity_world_, tti));
-    snapshots_.push_back({
-        {session_id_, kServerSenderId, sequence_},
-        {tick_, timestamp, sequence_},
-        phase_,
-        scenario_.world_width,
-        scenario_.world_height,
-        target_,
-        asset_,
-        target_world_,
-        asset_world_,
-        scenario_.target_velocity_x,
-        scenario_.target_velocity_y,
-        target_velocity_world_,
-        asset_velocity_world_,
-        target_heading,
-        asset_heading,
-        scenario_.interceptor_speed_per_tick,
-        std::max(1.0F, static_cast<float>(scenario_.interceptor_speed_per_tick) * 0.28F),
-        scenario_.intercept_radius,
-        scenario_.engagement_timeout_ticks,
-        static_cast<float>(scenario_.seeker_fov_deg),
-        seeker_lock_,
-        off_boresight_deg_,
-        distance > 0.0F,
-        predicted,
-        tti,
-        track_,
-        asset_status_,
-        command_status_,
-        judgment_,
-        viewer_connection,
-        {tick_, static_cast<std::uint32_t>((telemetry_interval_ms_ / 10) + tick_rate_hz_ + static_cast<int>(tick_)), packet_loss_pct, timestamp},
-    });
-    if (viewer_connection == ConnectionState::Reconnected) {
-        tactical_viewer_.connection = ConnectionState::Connected;
-    }
-}
-
-CommandResult SimulationSession::reject_command(std::string summary,
-                                                std::string reason,
-                                                std::vector<std::string> entity_ids) {
-    push_event(protocol::EventType::CommandRejected,
-               "simulation_server",
-               std::move(entity_ids),
-               std::move(summary),
-               reason);
-    if (!judgment_.ready) {
-        command_status_ = CommandLifecycle::Rejected;
-        judgment_.code = JudgmentCode::InvalidTransition;
-        judgment_.summary = reason;
-    }
-    return {false, std::move(reason), protocol::TcpMessageKind::CommandAck};
-}
-
-SimulationSession run_baseline_demo() {
-    SimulationSession session;
-    session.connect_client(ClientRole::CommandConsole, 101U);
-    session.connect_client(ClientRole::TacticalViewer, 201U);
-    session.start_scenario();
-    session.request_track();
-    session.advance_tick();
-    session.activate_asset();
-    session.disconnect_client(ClientRole::TacticalViewer, "viewer reconnect exercised for resilience evidence");
-    session.connect_client(ClientRole::TacticalViewer, 201U);
-    session.issue_command();
-    for (int i = 0; i < 12 && !session.latest_snapshot().judgment.ready; ++i) {
-        session.advance_tick();
-    }
-    session.archive_session();
-    return session;
-}
 
 }  // namespace icss::core

@@ -52,6 +52,10 @@ private:
                     std::string summary,
                     std::string details = {});
     void record_snapshot(float packet_loss_pct = 0.0F);
+    void clear_track_state();
+    void seed_track_state_from_target();
+    void update_track_state();
+    void reset_world_state_from_scenario();
     CommandResult reject_command(std::string summary,
                                  std::string reason,
                                  std::vector<std::string> entity_ids = {});
@@ -76,6 +80,14 @@ private:
     bool timeout_exercised_ {false};
     bool packet_gap_exercised_ {false};
     std::optional<std::uint64_t> engagement_started_tick_;
+    Vec2f track_estimate_world_ {};
+    Vec2f track_estimate_velocity_ {};
+    Vec2f track_measurement_world_ {};
+    Vec2f track_position_variance_ {};
+    Vec2f track_velocity_variance_ {};
+    bool track_measurement_valid_ {false};
+    std::uint32_t track_measurement_age_ticks_ {0};
+    std::uint32_t track_missed_updates_ {0};
     Vec2f target_world_ {};
     Vec2f asset_world_ {};
     Vec2f target_velocity_world_ {};

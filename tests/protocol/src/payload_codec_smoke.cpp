@@ -112,6 +112,16 @@ int main() {
         1.8F,
         true,
         82,
+        4.5F,
+        6.5F,
+        4.8F,
+        -2.7F,
+        true,
+        4.7F,
+        6.4F,
+        18.5F,
+        0,
+        1,
         "ready",
         "accepted",
         false,
@@ -139,6 +149,9 @@ int main() {
     assert(parsed_snapshot.predicted_intercept_valid);
     assert(parsed_snapshot.time_to_intercept_s > 1.0F);
     assert(parsed_snapshot.track_confidence_pct == 82);
+    assert(parsed_snapshot.track_estimated_x > 4.0F);
+    assert(parsed_snapshot.track_measurement_valid);
+    assert(parsed_snapshot.track_covariance_trace > 10.0F);
     assert(parsed_snapshot.asset_status == "ready");
     assert(parsed_snapshot.command_status == "accepted");
     assert(parsed_snapshot.judgment_code == "pending");

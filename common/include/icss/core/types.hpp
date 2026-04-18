@@ -75,13 +75,19 @@ struct ClientState {
     ClientRole role {ClientRole::CommandConsole};
     ConnectionState connection {ConnectionState::Disconnected};
     std::uint32_t sender_id {};
-    std::uint64_t last_seen_tick {};
     bool has_connected_before {false};
 };
 
 struct TrackState {
     bool active {false};
     int confidence_pct {0};
+    Vec2f estimated_position {};
+    Vec2f estimated_velocity {};
+    Vec2f measurement_position {};
+    bool measurement_valid {false};
+    float covariance_trace {0.0F};
+    std::uint32_t measurement_age_ticks {0};
+    std::uint32_t missed_updates {0};
 };
 
 struct JudgmentState {

@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "icss/protocol/frame_codec.hpp"
@@ -163,26 +164,20 @@ void send_json_frame(int fd, std::string_view kind, std::string_view payload) {
     assert(::send(fd, frame.data(), frame.size(), 0) >= 0);
 }
 
-std::optional<std::string> recv_json_line(int fd) {
-    std::string line;
-    char ch = '\0';
-    while (true) {
-        const auto received = ::recv(fd, &ch, 1, 0);
-        if (received <= 0) {
-            return std::nullopt;
-        }
-        if (ch == '\n') {
-            return line;
-        }
-        line.push_back(ch);
-    }
-}
-
 icss::protocol::FramedMessage wait_for_json_frame(int fd, int attempts = 20) {
+    static thread_local std::unordered_map<int, std::string> buffers;
+    auto& buffer = buffers[fd];
     for (int i = 0; i < attempts; ++i) {
-        const auto line = recv_json_line(fd);
-        if (line.has_value()) {
-            return icss::protocol::decode_json_frame(*line);
+        const auto newline = buffer.find('\n');
+        if (newline != std::string::npos) {
+            const auto line = buffer.substr(0, newline);
+            buffer.erase(0, newline + 1);
+            return icss::protocol::decode_json_frame(line);
+        }
+        char chunk[512];
+        const auto received = ::recv(fd, chunk, sizeof(chunk), 0);
+        if (received > 0) {
+            buffer.append(chunk, static_cast<std::size_t>(received));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
@@ -193,9 +188,9 @@ std::vector<std::string> recv_udp_messages(int fd, std::size_t max_messages, int
     std::vector<std::string> messages;
     char buffer[4096];
     sockaddr_in from {};
-    socklen_t len = sizeof(from);
     for (int attempt = 0; attempt < attempts && messages.empty(); ++attempt) {
         for (std::size_t i = 0; i < max_messages; ++i) {
+            socklen_t len = sizeof(from);
             const auto received = ::recvfrom(fd, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&from), &len);
             if (received <= 0) {
                 break;
@@ -291,7 +286,30 @@ int main() {
     send_json_frame(tcp_client.fd, "command_issue", serialize(CommandIssuePayload{{1001U, 101U, 5U}, "asset-interceptor", "target-alpha"}));
     assert(parse_command_ack(wait_for_json_frame(tcp_client.fd).payload).accepted);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+    bool saw_snapshot = false;
+    bool saw_telemetry = false;
+    bool judgment_ready = false;
+    const auto judgment_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < judgment_deadline && !judgment_ready) {
+        const auto udp_batch = recv_udp_messages(udp_viewer.fd, 20, 4);
+        for (const auto& wire : udp_batch) {
+            if (wire.rfind("kind=world_snapshot", 0) == 0) {
+                const auto snapshot = parse_snapshot(wire);
+                assert(snapshot.target_id == "target-alpha");
+                saw_snapshot = true;
+                judgment_ready = judgment_ready || snapshot.judgment_ready;
+            } else if (wire.rfind("kind=telemetry", 0) == 0) {
+                const auto telemetry = parse_telemetry(wire);
+                assert(!telemetry.connection_state.empty());
+                saw_telemetry = true;
+            }
+        }
+        if (!judgment_ready) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+    assert(judgment_ready);
+
     send_json_frame(tcp_client.fd, "aar_request", serialize(AarRequestPayload{{1001U, 101U, 6U}, 99U, "absolute"}));
     const auto aar_frame = wait_for_json_frame(tcp_client.fd);
     assert(aar_frame.kind == "aar_response");
@@ -308,8 +326,6 @@ int main() {
     assert(stop_ack.accepted);
 
     const auto udp_messages = recv_udp_messages(udp_viewer.fd, 20);
-    bool saw_snapshot = false;
-    bool saw_telemetry = false;
     for (const auto& wire : udp_messages) {
         if (wire.rfind("kind=world_snapshot", 0) == 0) {
             const auto snapshot = parse_snapshot(wire);

@@ -290,7 +290,30 @@ int main() {
     send_binary_frame(tcp_client.fd, "command_issue", serialize(CommandIssuePayload{{1001U, 101U, 5U}, "asset-interceptor", "target-alpha"}));
     assert(parse_command_ack(wait_for_binary_frame(tcp_client.fd).payload).accepted);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+    bool saw_snapshot = false;
+    bool saw_telemetry = false;
+    bool judgment_ready = false;
+    const auto judgment_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < judgment_deadline && !judgment_ready) {
+        const auto udp_batch = recv_udp_messages(udp_viewer.fd, 20, 4);
+        for (const auto& wire : udp_batch) {
+            if (wire.rfind("kind=world_snapshot", 0) == 0) {
+                const auto snapshot = parse_snapshot(wire);
+                assert(snapshot.target_id == "target-alpha");
+                saw_snapshot = true;
+                judgment_ready = judgment_ready || snapshot.judgment_ready;
+            } else if (wire.rfind("kind=telemetry", 0) == 0) {
+                const auto telemetry = parse_telemetry(wire);
+                assert(!telemetry.connection_state.empty());
+                saw_telemetry = true;
+            }
+        }
+        if (!judgment_ready) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+    assert(judgment_ready);
+
     send_binary_frame(tcp_client.fd, "aar_request", serialize(AarRequestPayload{{1001U, 101U, 6U}, 99U, "absolute"}));
     const auto aar_frame = wait_for_binary_frame(tcp_client.fd);
     assert(aar_frame.kind == "aar_response");
@@ -307,8 +330,6 @@ int main() {
     assert(stop_ack.accepted);
 
     const auto udp_messages = recv_udp_messages(udp_viewer.fd, 20);
-    bool saw_snapshot = false;
-    bool saw_telemetry = false;
     for (const auto& wire : udp_messages) {
         if (wire.rfind("kind=world_snapshot", 0) == 0) {
             const auto snapshot = parse_snapshot(wire);

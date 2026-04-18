@@ -20,7 +20,9 @@ namespace {
 #if !defined(_WIN32)
 using icss::testsupport::process::ChildProcess;
 
-ChildProcess spawn_command_console(std::uint16_t tcp_port, std::string frame_format) {
+ChildProcess spawn_command_console(const std::filesystem::path& repo_root,
+                                   std::uint16_t tcp_port,
+                                   std::string frame_format) {
     int pipe_fds[2] {};
     assert(::pipe(pipe_fds) == 0);
     const auto pid = ::fork();
@@ -39,6 +41,7 @@ ChildProcess spawn_command_console(std::uint16_t tcp_port, std::string frame_for
             "--host", "127.0.0.1",
             "--tcp-port", port,
             "--tcp-frame-format", std::move(frame_format),
+            "--repo-root", repo_root.string(),
         };
         std::vector<char*> argv;
         argv.reserve(argv_storage.size() + 1);
@@ -65,6 +68,31 @@ int main() {
     namespace process = icss::testsupport::process;
 
     const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_command_console_live_");
+    {
+        const fs::path scenario_file = temp_root / "configs/scenario.example.yaml";
+        std::ofstream out(scenario_file);
+        out << "scenario:\n";
+        out << "  name: basic_intercept_training\n";
+        out << "  description: command console timeout verification\n";
+        out << "entities:\n";
+        out << "  targets: 1\n";
+        out << "  assets: 1\n";
+        out << "rules:\n";
+        out << "  enable_replay: true\n";
+        out << "  telemetry_interval_ms: 200\n";
+        out << "  world_width: 576\n";
+        out << "  world_height: 384\n";
+        out << "  target_start_x: 80\n";
+        out << "  target_start_y: 300\n";
+        out << "  target_velocity_x: 9\n";
+        out << "  target_velocity_y: -6\n";
+        out << "  interceptor_start_x: 160\n";
+        out << "  interceptor_start_y: 60\n";
+        out << "  interceptor_speed_per_tick: 8\n";
+        out << "  intercept_radius: 12\n";
+        out << "  engagement_timeout_ticks: 10\n";
+        out << "  seeker_fov_deg: 45\n";
+    }
     auto server = process::spawn_server_process({
         .repo_root = temp_root,
         .tcp_frame_format = "binary",
@@ -73,7 +101,7 @@ int main() {
     });
     const auto startup = process::wait_for_startup(server);
 
-    auto console = spawn_command_console(startup.tcp_port, "binary");
+    auto console = spawn_command_console(temp_root, startup.tcp_port, "binary");
     const auto [console_exited, console_status] =
         process::wait_for_exit(console.pid, std::chrono::steady_clock::now() + std::chrono::seconds(5));
     assert(console_exited);
@@ -95,7 +123,7 @@ int main() {
     assert(output.find("asset_activate: accepted") != std::string::npos);
     assert(output.find("command_issue: accepted") != std::string::npos);
     assert(output.find("aar_response: cursor=") != std::string::npos);
-    assert(output.find("judgment_code=intercept_success") != std::string::npos);
+    assert(output.find("judgment_code=timeout_observed") != std::string::npos);
     assert(output.find("scenario_stop: accepted") != std::string::npos);
 
     ::kill(server.pid, SIGTERM);

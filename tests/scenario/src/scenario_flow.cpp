@@ -22,7 +22,8 @@ int main() {
     assert(summary.judgment_code == JudgmentCode::InterceptSuccess);
     assert(session.latest_snapshot().asset_status == AssetStatus::Complete);
     assert(session.latest_snapshot().command_status == CommandLifecycle::Completed);
-    assert(session.latest_snapshot().track.confidence_pct >= 80);
+    assert(session.latest_snapshot().track.confidence_pct >= 55);
+    assert(session.latest_snapshot().track.covariance_trace > 0.0F);
 
     const auto unique_suffix = std::to_string(
         std::chrono::steady_clock::now().time_since_epoch().count());

@@ -25,7 +25,8 @@ struct ViewerOptions {
     std::uint32_t session_id {1001U};
     std::uint32_t sender_id {201U};
     std::uint64_t duration_ms {0};
-    std::uint64_t heartbeat_interval_ms {1000};
+    std::uint64_t heartbeat_interval_ms {100};
+    std::filesystem::path repo_root {std::filesystem::current_path()};
     int width {1360};
     int height {860};
     bool hidden {false};
@@ -34,6 +35,7 @@ struct ViewerOptions {
     std::string tcp_frame_format {"json"};
     std::vector<std::string> auto_controls;
     std::filesystem::path dump_state_path;
+    std::filesystem::path dump_frame_path;
     std::filesystem::path font_path;
 };
 
@@ -69,18 +71,19 @@ struct ViewerState {
     std::uint64_t heartbeat_count {0};
     std::uint64_t snapshot_count_received {0};
     std::uint64_t telemetry_count_received {0};
+    std::uint64_t last_datagram_received_ms {0};
+    std::uint64_t last_join_attempt_ms {0};
     std::uint64_t last_server_event_tick {0};
     std::string last_server_event_type {"none"};
     std::string last_server_event_summary {"no server event"};
     std::deque<icss::core::Vec2> target_history;
     std::deque<icss::core::Vec2> asset_history;
-    bool command_visual_active {false};
     ControlState control;
     ReviewState review;
-    std::string profile_label {"Balanced"};
 };
 
 struct Button {
+    std::string action;
     std::string label;
     SDL_Rect rect {};
 };
@@ -95,6 +98,7 @@ struct GuiLayout {
     SDL_Rect decision_panel {};
     SDL_Rect resilience_panel {};
     SDL_Rect control_panel {};
+    SDL_Rect setup_panel {};
     SDL_Rect event_panel {};
     std::vector<Button> buttons;
 };
@@ -125,10 +129,15 @@ std::string telemetry_event_status(const ViewerState& state);
 std::string format_fixed_1(float value);
 std::string format_fixed_0(std::uint32_t value);
 float heading_deg_gui(icss::core::Vec2f v);
-icss::core::ScenarioConfig default_viewer_scenario();
-icss::core::ScenarioConfig scenario_profile(std::string_view profile_label);
+icss::core::ScenarioConfig default_viewer_scenario(const std::filesystem::path& repo_root);
+bool apply_parameter_action(ViewerState& state, std::string_view action);
+bool is_live_control_action(std::string_view action);
 std::string recommended_control_label(const ViewerState& state);
-bool is_profile_button(std::string_view label);
+bool target_motion_visual_visible(const ViewerState& state);
+bool asset_motion_visual_visible(const ViewerState& state);
+bool engagement_visual_visible(const ViewerState& state);
+bool predicted_marker_visual_visible(const ViewerState& state);
+bool command_visual_active(const ViewerState& state);
 void sync_preview_from_planned_scenario(ViewerState& state);
 void apply_snapshot(ViewerState& state, const icss::protocol::SnapshotPayload& payload);
 void apply_telemetry(ViewerState& state, const icss::protocol::TelemetryPayload& payload);
@@ -163,7 +172,7 @@ private:
 FrameMode parse_frame_mode(std::string_view value);
 void send_viewer_join(UdpSocket& socket, const ViewerOptions& options, std::uint64_t& sequence);
 void send_viewer_heartbeat(UdpSocket& socket, const ViewerOptions& options, std::uint64_t& sequence, ViewerState& state);
-void receive_datagrams(UdpSocket& socket, ViewerState& state);
+void receive_datagrams(UdpSocket& socket, ViewerState& state, std::uint64_t now_ms);
 void send_frame(TcpSocket& socket, FrameMode mode, std::string_view kind, std::string_view payload);
 icss::protocol::FramedMessage recv_frame(TcpSocket& socket, FrameMode mode);
 void ensure_control_connected(TcpSocket& socket, ViewerState& state, const ViewerOptions& options, FrameMode mode);
@@ -189,6 +198,7 @@ void render_gui(SDL_Renderer* renderer,
                 TTF_Font* body_font,
                 const ViewerState& state,
                 const ViewerOptions& options);
+void write_dump_frame(SDL_Renderer* renderer, const std::filesystem::path& path);
 void write_dump_state(const std::filesystem::path& path, const ViewerState& state);
 
 }  // namespace icss::viewer_gui

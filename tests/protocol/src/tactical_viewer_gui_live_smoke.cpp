@@ -58,7 +58,7 @@ ChildProcess spawn_gui_viewer(const std::filesystem::path& dump_path,
             "--headless",
             "--hidden",
             "--auto-control-script",
-            "--auto-controls", "Start",
+            "--auto-controls", "target_pos_x_inc,target_pos_y_dec,asset_pos_x_inc,asset_pos_y_inc,Start",
             "--duration-ms", "1800",
             "--heartbeat-interval-ms", "100",
             "--dump-state", dump_path.string(),
@@ -131,7 +131,6 @@ int main() {
     assert(icss::testsupport::minijson::require_field(object, "tick").is_int());
     assert(icss::testsupport::minijson::require_field(object, "phase").as_string() == "detecting");
     assert(icss::testsupport::minijson::require_field(object, "phase_banner").as_string() == "DETECTING");
-    assert(icss::testsupport::minijson::require_field(object, "profile_label").as_string() == "Balanced");
     assert(icss::testsupport::minijson::require_field(object, "connection_state").as_string() == "connected");
     const auto freshness = icss::testsupport::minijson::require_field(object, "freshness").as_string();
     assert(freshness == "fresh" || freshness == "degraded");
@@ -142,6 +141,14 @@ int main() {
     assert(icss::testsupport::minijson::require_field(object, "last_server_event_type").as_string() == "session_started");
     assert(icss::testsupport::minijson::require_field(object, "authoritative_headline").as_string().find("SESSION STARTED") != std::string::npos);
     assert(icss::testsupport::minijson::require_field(object, "recommended_control").as_string() == "Track");
+    assert(!icss::testsupport::minijson::require_field(object, "target_motion_visual_visible").as_bool());
+    assert(!icss::testsupport::minijson::require_field(object, "asset_motion_visual_visible").as_bool());
+    assert(!icss::testsupport::minijson::require_field(object, "engagement_visual_visible").as_bool());
+    assert(!icss::testsupport::minijson::require_field(object, "predicted_marker_visual_visible").as_bool());
+    assert(icss::testsupport::minijson::require_field(object, "planned_target_start_x").as_int() == 96);
+    assert(icss::testsupport::minijson::require_field(object, "planned_target_start_y").as_int() == 284);
+    assert(icss::testsupport::minijson::require_field(object, "planned_interceptor_start_x").as_int() == 176);
+    assert(icss::testsupport::minijson::require_field(object, "planned_interceptor_start_y").as_int() == 76);
     assert(icss::testsupport::minijson::require_field(object, "last_control_label").as_string() == "Start");
     assert(icss::testsupport::minijson::require_field(object, "last_control_message").as_string().find("scenario started") != std::string::npos);
     assert(icss::testsupport::minijson::require_field(object, "target_active").as_bool());
@@ -159,7 +166,10 @@ int main() {
     assert(icss::testsupport::minijson::require_field(object, "seeker_fov_deg").is_number());
     assert(icss::testsupport::minijson::require_field(object, "target_world_x").is_number());
     assert(icss::testsupport::minijson::require_field(object, "time_to_intercept_s").is_number());
-    assert(icss::testsupport::minijson::require_field(object, "predicted_intercept_valid").as_bool());
+    assert(!icss::testsupport::minijson::require_field(object, "predicted_intercept_valid").as_bool());
+    assert(!icss::testsupport::minijson::require_field(object, "seeker_lock").as_bool());
+    assert(icss::testsupport::minijson::require_field(object, "track_confidence_pct").as_int() >= 0);
+    assert(icss::testsupport::minijson::require_field(object, "track_covariance_trace").is_number());
     assert(icss::testsupport::minijson::require_field(object, "recent_event_count").as_int() >= 2);
 
     ::kill(server.pid, SIGTERM);

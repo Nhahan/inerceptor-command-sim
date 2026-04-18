@@ -22,7 +22,7 @@ int main() {
     transport->advance_tick();
     transport->dispatch(icss::protocol::AssetActivatePayload{{1001U, 101U, 2U}, "asset-interceptor"});
     transport->dispatch(icss::protocol::CommandIssuePayload{{1001U, 101U, 3U}, "asset-interceptor", "target-alpha"});
-    for (int i = 0; i < 12 && !transport->latest_snapshot().judgment.ready; ++i) {
+    for (int i = 0; i < transport->latest_snapshot().engagement_timeout_ticks && !transport->latest_snapshot().judgment.ready; ++i) {
         transport->advance_tick();
     }
     transport->archive_session();
@@ -73,6 +73,16 @@ int main() {
         snapshot.time_to_intercept_s,
         snapshot.track.active,
         snapshot.track.confidence_pct,
+        snapshot.track.estimated_position.x,
+        snapshot.track.estimated_position.y,
+        snapshot.track.estimated_velocity.x,
+        snapshot.track.estimated_velocity.y,
+        snapshot.track.measurement_valid,
+        snapshot.track.measurement_position.x,
+        snapshot.track.measurement_position.y,
+        snapshot.track.covariance_trace,
+        static_cast<int>(snapshot.track.measurement_age_ticks),
+        static_cast<int>(snapshot.track.missed_updates),
         to_string(snapshot.asset_status),
         to_string(snapshot.command_status),
         snapshot.judgment.ready,

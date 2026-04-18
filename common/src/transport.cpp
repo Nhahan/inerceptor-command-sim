@@ -1,6 +1,7 @@
 #include "icss/net/transport.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <deque>
 #include <fstream>
 #include <optional>
@@ -52,6 +53,16 @@ std::vector<icss::core::EventRecord> recent_events(const icss::core::SimulationS
     return recent;
 }
 
+const icss::core::EventRecord* latest_event_at_or_before_tick(const std::vector<icss::core::EventRecord>& events,
+                                                              std::uint64_t tick) {
+    for (auto it = events.rbegin(); it != events.rend(); ++it) {
+        if (it->header.tick <= tick) {
+            return &*it;
+        }
+    }
+    return nullptr;
+}
+
 icss::protocol::SnapshotPayload to_snapshot_payload(const icss::core::Snapshot& snapshot) {
     return {
         snapshot.envelope,
@@ -92,6 +103,16 @@ icss::protocol::SnapshotPayload to_snapshot_payload(const icss::core::Snapshot& 
         snapshot.time_to_intercept_s,
         snapshot.track.active,
         snapshot.track.confidence_pct,
+        snapshot.track.estimated_position.x,
+        snapshot.track.estimated_position.y,
+        snapshot.track.estimated_velocity.x,
+        snapshot.track.estimated_velocity.y,
+        snapshot.track.measurement_valid,
+        snapshot.track.measurement_position.x,
+        snapshot.track.measurement_position.y,
+        snapshot.track.covariance_trace,
+        static_cast<int>(snapshot.track.measurement_age_ticks),
+        static_cast<int>(snapshot.track.missed_updates),
         icss::core::to_string(snapshot.asset_status),
         icss::core::to_string(snapshot.command_status),
         snapshot.judgment.ready,
@@ -104,11 +125,10 @@ icss::protocol::TelemetryPayload to_telemetry_payload(const icss::core::Snapshot
     std::uint64_t event_tick = 0;
     std::string event_type = "none";
     std::string event_summary = "no server event";
-    if (!events.empty()) {
-        const auto& event = events.back();
-        event_tick = event.header.tick;
-        event_type = std::string(icss::protocol::to_string(event.header.event_type));
-        event_summary = event.summary;
+    if (const auto* event = latest_event_at_or_before_tick(events, snapshot.header.tick)) {
+        event_tick = event->header.tick;
+        event_type = std::string(icss::protocol::to_string(event->header.event_type));
+        event_summary = event->summary;
     }
     return {
         snapshot.envelope,
@@ -390,10 +410,7 @@ public:
           session_(kDefaultSessionId, config.server.tick_rate_hz, config.scenario.telemetry_interval_ms, config.scenario),
           tcp_listener_(bind_tcp_listener(config.server)),
           udp_socket_(bind_udp_socket(config.server)),
-          tcp_frame_format_(parse_frame_format(config.server.tcp_frame_format)),
-          heartbeat_timeout_ticks_(std::max<std::uint64_t>(1U,
-              static_cast<std::uint64_t>((config.server.heartbeat_timeout_ms + config.scenario.telemetry_interval_ms - 1)
-                                         / config.scenario.telemetry_interval_ms))) {
+          tcp_frame_format_(parse_frame_format(config.server.tcp_frame_format)) {
         info_ = {"socket_live", true, bound_port(tcp_listener_.get()), bound_port(udp_socket_.get())};
     }
 
@@ -443,7 +460,6 @@ public:
     icss::core::CommandResult dispatch(const icss::protocol::CommandIssuePayload&) override { return unsupported(); }
 
     void advance_tick() override {
-        ++logical_tick_;
         maybe_timeout_viewer();
         session_.advance_tick();
         send_pending_snapshots();
@@ -488,13 +504,6 @@ private:
         std::string control {"absolute"};
         std::uint64_t requested_index {0};
         bool clamped {false};
-    };
-
-    struct ViewerBinding {
-        std::uint32_t sender_id {};
-        sockaddr_in endpoint {};
-        std::uint64_t last_heartbeat_tick {};
-        std::size_t last_snapshot_sent_index {};
     };
 
     static icss::core::CommandResult unsupported() {
@@ -742,6 +751,12 @@ private:
                 send_ack(payload.envelope, *invalid);
                 return;
             }
+            if (session_.phase() != icss::core::SessionPhase::Initialized) {
+                send_ack(payload.envelope,
+                         reject_payload("Scenario start rejected",
+                                        "scenario can only be started from initialized state"));
+                return;
+            }
             if (payload.scenario_name != config_.scenario.name) {
                 send_ack(payload.envelope, reject_payload("Scenario start rejected",
                                                          "scenario_start payload does not match configured scenario"));
@@ -942,7 +957,7 @@ private:
                     if (payload.envelope.session_id != kDefaultSessionId || payload.envelope.sender_id != viewer_sender_id_) {
                         continue;
                     }
-                    last_viewer_heartbeat_tick_ = logical_tick_;
+                    last_viewer_heartbeat_at_ = std::chrono::steady_clock::now();
                     if (!session_.snapshots().empty() &&
                         session_.latest_snapshot().viewer_connection == icss::core::ConnectionState::TimedOut) {
                         session_.connect_client(icss::core::ClientRole::TacticalViewer, viewer_sender_id_);
@@ -973,12 +988,17 @@ private:
             }
             if (viewer_endpoint_.has_value() && viewer_sender_id_ == payload.envelope.sender_id &&
                 same_endpoint(*viewer_endpoint_, addr)) {
-                last_viewer_heartbeat_tick_ = logical_tick_;
+                last_viewer_heartbeat_at_ = std::chrono::steady_clock::now();
+                if (!session_.snapshots().empty() &&
+                    session_.latest_snapshot().viewer_connection == icss::core::ConnectionState::TimedOut) {
+                    session_.connect_client(icss::core::ClientRole::TacticalViewer, viewer_sender_id_);
+                    send_pending_snapshots();
+                }
                 continue;
             }
             viewer_sender_id_ = payload.envelope.sender_id;
             viewer_endpoint_ = addr;
-            last_viewer_heartbeat_tick_ = logical_tick_;
+            last_viewer_heartbeat_at_ = std::chrono::steady_clock::now();
             reset_viewer_delivery_cursor();
             session_.connect_client(icss::core::ClientRole::TacticalViewer, viewer_sender_id_);
             send_pending_snapshots();
@@ -986,13 +1006,14 @@ private:
     }
 
     void maybe_timeout_viewer() {
-        if (!viewer_endpoint_.has_value() || !last_viewer_heartbeat_tick_.has_value()) {
+        if (!viewer_endpoint_.has_value() || !last_viewer_heartbeat_at_.has_value()) {
             return;
         }
-        if (logical_tick_ >= *last_viewer_heartbeat_tick_ + heartbeat_timeout_ticks_) {
+        const auto elapsed = std::chrono::steady_clock::now() - *last_viewer_heartbeat_at_;
+        if (elapsed >= std::chrono::milliseconds(config_.server.heartbeat_timeout_ms)) {
             timeout_client(icss::core::ClientRole::TacticalViewer,
                            "viewer heartbeat timeout threshold exceeded");
-            last_viewer_heartbeat_tick_.reset();
+            last_viewer_heartbeat_at_.reset();
         }
     }
 
@@ -1027,7 +1048,7 @@ private:
 
     void clear_viewer_binding() {
         viewer_endpoint_.reset();
-        last_viewer_heartbeat_tick_.reset();
+        last_viewer_heartbeat_at_.reset();
         pending_udp_messages_.clear();
         viewer_sender_id_ = 0U;
         last_snapshot_sent_index_ = 0U;
@@ -1052,16 +1073,14 @@ private:
     SocketHandle udp_socket_;
     std::optional<SocketHandle> command_client_;
     std::optional<sockaddr_in> viewer_endpoint_;
-    std::optional<std::uint64_t> last_viewer_heartbeat_tick_;
+    std::optional<std::chrono::steady_clock::time_point> last_viewer_heartbeat_at_;
     std::string tcp_buffer_;
     std::deque<std::string> pending_tcp_lines_;
     std::deque<PendingDatagram> pending_udp_messages_;
     std::uint32_t command_sender_id_ {0};
     std::uint32_t viewer_sender_id_ {0};
     std::uint64_t server_sequence_ {0};
-    std::uint64_t logical_tick_ {0};
     icss::protocol::FrameFormat tcp_frame_format_ {icss::protocol::FrameFormat::JsonLine};
-    std::uint64_t heartbeat_timeout_ticks_ {1};
     std::size_t last_snapshot_sent_index_ {0};
     icss::view::ReplayCursor replay_cursor_ {};
     BackendInfo info_ {};

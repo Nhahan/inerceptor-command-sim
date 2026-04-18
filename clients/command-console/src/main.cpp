@@ -24,6 +24,16 @@
 
 namespace {
 
+std::filesystem::path resolve_repo_root(std::filesystem::path path) {
+    if (std::filesystem::exists(path / "configs/server.example.yaml")) {
+        return path;
+    }
+    if (std::filesystem::exists(path.parent_path() / "configs/server.example.yaml")) {
+        return path.parent_path();
+    }
+    return path;
+}
+
 struct ConsoleOptions {
     std::string backend {"in_process"};
     std::string host {"127.0.0.1"};
@@ -32,6 +42,7 @@ struct ConsoleOptions {
     std::uint32_t session_id {1001U};
     std::uint32_t sender_id {101U};
     std::string scenario_name {"basic_intercept_training"};
+    std::filesystem::path repo_root {std::filesystem::current_path()};
 };
 
 ConsoleOptions parse_args(int argc, char** argv) {
@@ -72,11 +83,15 @@ ConsoleOptions parse_args(int argc, char** argv) {
             options.scenario_name = require_value(arg);
             continue;
         }
+        if (arg == "--repo-root") {
+            options.repo_root = require_value(arg);
+            continue;
+        }
         if (arg == "--help") {
             std::cout
                 << "usage: icss_command_console [--backend in_process|socket_live] [--host HOST] [--tcp-port PORT]\n"
                 << "                           [--tcp-frame-format json|binary] [--session-id ID] [--sender-id ID]\n"
-                << "                           [--scenario-name NAME]\n";
+                << "                           [--scenario-name NAME] [--repo-root PATH]\n";
             std::exit(0);
         }
         throw std::runtime_error("unknown argument: " + std::string(arg));
@@ -189,6 +204,8 @@ void print_ack(std::string_view kind, const icss::protocol::CommandAckPayload& a
 int run_socket_live(const ConsoleOptions& options) {
     const auto frame_mode = parse_frame_mode(options.tcp_frame_format);
     TcpSocket socket(options.host, options.tcp_port);
+    const auto runtime_config = icss::core::load_runtime_config(resolve_repo_root(options.repo_root));
+    const auto& scenario = runtime_config.scenario;
     std::uint64_t sequence = 1;
 
     const auto send_and_expect_ack = [&](std::string_view kind, std::string payload) {
@@ -199,6 +216,9 @@ int run_socket_live(const ConsoleOptions& options) {
         }
         const auto ack = icss::protocol::parse_command_ack(frame.payload);
         print_ack(kind, ack);
+        if (!ack.accepted) {
+            throw std::runtime_error(std::string(kind) + " rejected: " + ack.reason);
+        }
         return ack;
     };
 
@@ -211,7 +231,22 @@ int run_socket_live(const ConsoleOptions& options) {
         icss::protocol::serialize(icss::protocol::SessionJoinPayload{{options.session_id, options.sender_id, sequence++}, "command_console"}));
     send_and_expect_ack(
         "scenario_start",
-        icss::protocol::serialize(icss::protocol::ScenarioStartPayload{{options.session_id, options.sender_id, sequence++}, options.scenario_name}));
+        icss::protocol::serialize(icss::protocol::ScenarioStartPayload{
+            {options.session_id, options.sender_id, sequence++},
+            options.scenario_name,
+            scenario.world_width,
+            scenario.world_height,
+            scenario.target_start_x,
+            scenario.target_start_y,
+            scenario.target_velocity_x,
+            scenario.target_velocity_y,
+            scenario.interceptor_start_x,
+            scenario.interceptor_start_y,
+            scenario.interceptor_speed_per_tick,
+            scenario.intercept_radius,
+            scenario.engagement_timeout_ticks,
+            scenario.seeker_fov_deg,
+        }));
     send_and_expect_ack(
         "track_request",
         icss::protocol::serialize(icss::protocol::TrackRequestPayload{{options.session_id, options.sender_id, sequence++}, "target-alpha"}));

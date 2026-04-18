@@ -13,14 +13,7 @@ void perform_control_action(std::string_view action_label,
                             const ViewerOptions& options,
                             FrameMode frame_mode,
                             TcpSocket& control_socket) {
-    if (is_profile_button(action_label)) {
-        state.profile_label = std::string(action_label);
-        state.planned_scenario = scenario_profile(action_label);
-        sync_preview_from_planned_scenario(state);
-        state.control.last_ok = true;
-        state.control.last_label = std::string(action_label);
-        state.control.last_message = "scenario profile selected";
-        push_timeline_entry(state, "[profile] " + std::string(action_label) + " selected");
+    if (apply_parameter_action(state, action_label)) {
         return;
     }
 
@@ -43,11 +36,13 @@ void perform_control_action(std::string_view action_label,
             state.review.visible = false;
         }
         if (action_label == "Start") {
+            sync_preview_from_planned_scenario(state);
             state.snapshot.phase = icss::core::SessionPhase::Detecting;
             state.snapshot.target.active = true;
             state.snapshot.command_status = icss::core::CommandLifecycle::None;
             state.snapshot.asset_status = icss::core::AssetStatus::Idle;
-            state.command_visual_active = false;
+            state.target_history.clear();
+            state.asset_history.clear();
         } else if (action_label == "Activate") {
             state.snapshot.phase = icss::core::SessionPhase::AssetReady;
             state.snapshot.asset.active = true;
@@ -55,15 +50,19 @@ void perform_control_action(std::string_view action_label,
         } else if (action_label == "Track") {
             state.snapshot.phase = icss::core::SessionPhase::Tracking;
             state.snapshot.track.active = true;
-            state.snapshot.track.confidence_pct = std::max(state.snapshot.track.confidence_pct, 82);
+            state.snapshot.track.confidence_pct = 0;
+            state.snapshot.track.covariance_trace = 0.0F;
+            state.snapshot.track.measurement_valid = false;
+            state.snapshot.track.measurement_age_ticks = 0;
+            state.snapshot.track.missed_updates = 0;
         } else if (action_label == "Command") {
             state.snapshot.phase = icss::core::SessionPhase::CommandIssued;
             state.snapshot.command_status = icss::core::CommandLifecycle::Accepted;
-            state.snapshot.asset_status = icss::core::AssetStatus::Engaging;
-            state.command_visual_active = true;
+            state.snapshot.asset_status = icss::core::AssetStatus::Ready;
         } else if (action_label == "Stop") {
             state.snapshot.phase = icss::core::SessionPhase::Archived;
         } else if (action_label == "Reset") {
+            sync_preview_from_planned_scenario(state);
             state.snapshot.phase = icss::core::SessionPhase::Initialized;
             state.snapshot.target.active = false;
             state.snapshot.asset.active = false;
@@ -72,7 +71,6 @@ void perform_control_action(std::string_view action_label,
             state.snapshot.command_status = icss::core::CommandLifecycle::None;
             state.snapshot.asset_status = icss::core::AssetStatus::Idle;
             state.snapshot.judgment = {};
-            state.command_visual_active = false;
             state.review = {};
         }
     };
@@ -82,7 +80,7 @@ void perform_control_action(std::string_view action_label,
             "scenario_start",
             icss::protocol::serialize(icss::protocol::ScenarioStartPayload{
                 {options.session_id, options.sender_id, state.control.sequence++},
-                "basic_intercept_training",
+                state.planned_scenario.name,
                 state.planned_scenario.world_width,
                 state.planned_scenario.world_height,
                 state.planned_scenario.target_start_x,

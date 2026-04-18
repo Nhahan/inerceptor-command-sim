@@ -45,9 +45,8 @@ ChildProcess spawn_gui_viewer(const std::filesystem::path& dump_path,
             "--tcp-port", tcp,
             "--headless",
             "--hidden",
-            "--auto-controls", "Start,Track,Activate,Command",
-            "--duration-ms", "1400",
-            "--heartbeat-interval-ms", "100",
+            "--heartbeat-interval-ms", "600",
+            "--duration-ms", "2600",
             "--dump-state", dump_path.string(),
         };
         std::vector<char*> argv;
@@ -79,56 +78,34 @@ int main() {
     namespace fs = std::filesystem;
     namespace process = icss::testsupport::process;
 
-    const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_gui_command_feedback_");
+    const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_gui_auto_rejoin_");
     auto server = process::spawn_server_process({
         .repo_root = temp_root,
         .tcp_frame_format = "json",
         .run_forever = true,
         .tick_sleep_ms = 20,
+        .heartbeat_interval_ms = 100,
+        .heartbeat_timeout_ms = 300,
     });
     const auto startup = process::wait_for_startup(server);
 
-    const fs::path dump_path = temp_root / "viewer-command-feedback.json";
+    const fs::path dump_path = temp_root / "viewer-auto-rejoin.json";
     auto viewer = spawn_gui_viewer(dump_path, startup.udp_port, startup.tcp_port);
 
     const auto [viewer_exited, viewer_status] =
-        process::wait_for_exit(viewer.pid, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+        process::wait_for_exit(viewer.pid, std::chrono::steady_clock::now() + std::chrono::seconds(8));
     assert(viewer_exited);
     assert(WIFEXITED(viewer_status));
     assert(WEXITSTATUS(viewer_status) == 0);
     viewer.pid = -1;
 
     const auto dump_json = icss::testsupport::minijson::parse(read_text(dump_path));
-    assert(dump_json.is_object());
     const auto& object = dump_json.as_object();
     assert(icss::testsupport::minijson::require_field(object, "received_snapshot").as_bool());
     assert(icss::testsupport::minijson::require_field(object, "received_telemetry").as_bool());
-    const auto phase = icss::testsupport::minijson::require_field(object, "phase").as_string();
-    assert(phase == "command_issued" || phase == "engaging" || phase == "judged");
-    const auto phase_banner = icss::testsupport::minijson::require_field(object, "phase_banner").as_string();
-    assert(phase_banner == "COMMAND ACCEPTED" || phase_banner == "ENGAGING" || phase_banner == "JUDGMENT PRODUCED");
-    assert(icss::testsupport::minijson::require_field(object, "target_active").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "asset_active").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "last_control_label").as_string() == "Command");
-    assert(icss::testsupport::minijson::require_field(object, "last_control_message").as_string().find("command accepted") != std::string::npos);
-    const auto authoritative_headline = icss::testsupport::minijson::require_field(object, "authoritative_headline").as_string();
-    assert(authoritative_headline.find("ACTIVE COMMAND") != std::string::npos
-           || authoritative_headline.find("JUDGMENT") != std::string::npos);
-    assert(icss::testsupport::minijson::require_field(object, "recommended_control").as_string() == "Stop");
-    assert(icss::testsupport::minijson::require_field(object, "last_server_event_tick").is_int());
-    const auto command_status = icss::testsupport::minijson::require_field(object, "command_status").as_string();
-    assert(command_status == "accepted" || command_status == "executing" || command_status == "completed");
-    const auto asset_status = icss::testsupport::minijson::require_field(object, "asset_status").as_string();
-    assert(asset_status == "engaging" || asset_status == "complete");
-    assert(icss::testsupport::minijson::require_field(object, "command_visual_active").as_bool() || command_status == "completed");
-    assert(icss::testsupport::minijson::require_field(object, "predicted_intercept_valid").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "track_covariance_trace").is_number());
-    assert(icss::testsupport::minijson::require_field(object, "track_confidence_pct").as_int() > 0);
-    assert(icss::testsupport::minijson::require_field(object, "target_motion_visual_visible").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "asset_motion_visual_visible").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "engagement_visual_visible").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "predicted_marker_visual_visible").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "recent_event_count").as_int() >= 4);
+    const auto connection = icss::testsupport::minijson::require_field(object, "connection_state").as_string();
+    assert(connection == "connected" || connection == "reconnected");
+    assert(icss::testsupport::minijson::require_field(object, "recent_event_count").as_int() >= 1);
 
     ::kill(server.pid, SIGTERM);
     const auto [server_exited, server_status] =

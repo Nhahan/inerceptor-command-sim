@@ -136,7 +136,7 @@ void send_viewer_heartbeat(UdpSocket& socket, const ViewerOptions& options, std:
     ++state.heartbeat_count;
 }
 
-void receive_datagrams(UdpSocket& socket, ViewerState& state) {
+void receive_datagrams(UdpSocket& socket, ViewerState& state, std::uint64_t now_ms) {
     char buffer[4096];
     sockaddr_in from {};
     socklen_t len = sizeof(from);
@@ -151,12 +151,21 @@ void receive_datagrams(UdpSocket& socket, ViewerState& state) {
             break;
         }
         const std::string wire(buffer, buffer + received);
+        state.last_datagram_received_ms = now_ms;
         if (wire.rfind("kind=world_snapshot", 0) == 0) {
-            apply_snapshot(state, icss::protocol::parse_snapshot(wire));
+            try {
+                apply_snapshot(state, icss::protocol::parse_snapshot(wire));
+            } catch (const std::exception&) {
+                continue;
+            }
             continue;
         }
         if (wire.rfind("kind=telemetry", 0) == 0) {
-            apply_telemetry(state, icss::protocol::parse_telemetry(wire));
+            try {
+                apply_telemetry(state, icss::protocol::parse_telemetry(wire));
+            } catch (const std::exception&) {
+                continue;
+            }
         }
     }
 }
@@ -227,6 +236,9 @@ void ensure_control_connected(TcpSocket& socket,
     state.control.last_ok = ack.accepted;
     state.control.last_label = "join";
     state.control.last_message = ack.reason;
+    if (!ack.accepted) {
+        throw std::runtime_error("command console attach rejected: " + ack.reason);
+    }
 }
 
 #else
@@ -241,7 +253,7 @@ bool TcpSocket::connected() const { return false; }
 int TcpSocket::fd() const { return -1; }
 void send_viewer_join(UdpSocket&, const ViewerOptions&, std::uint64_t&) {}
 void send_viewer_heartbeat(UdpSocket&, const ViewerOptions&, std::uint64_t&, ViewerState&) {}
-void receive_datagrams(UdpSocket&, ViewerState&) {}
+void receive_datagrams(UdpSocket&, ViewerState&, std::uint64_t) {}
 void ensure_control_connected(TcpSocket&, ViewerState&, const ViewerOptions&, FrameMode) {}
 void send_frame(TcpSocket&, FrameMode, std::string_view, std::string_view) {}
 icss::protocol::FramedMessage recv_frame(TcpSocket&, FrameMode) { throw std::runtime_error("gui networking unsupported on this platform"); }

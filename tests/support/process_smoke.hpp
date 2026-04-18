@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -235,7 +236,7 @@ inline void send_binary_frame(int fd, std::string_view kind, std::string_view pa
 }
 
 inline std::vector<std::uint8_t> recv_some(int fd) {
-    std::vector<std::uint8_t> bytes(1024);
+    std::vector<std::uint8_t> bytes(4096);
     const auto received = ::recv(fd, bytes.data(), bytes.size(), 0);
     if (received <= 0) {
         return {};
@@ -263,26 +264,20 @@ inline void send_json_frame(int fd, std::string_view kind, std::string_view payl
     assert(::send(fd, frame.data(), frame.size(), 0) >= 0);
 }
 
-inline std::optional<std::string> recv_json_line(int fd) {
-    std::string line;
-    char ch = '\0';
-    while (true) {
-        const auto received = ::recv(fd, &ch, 1, 0);
-        if (received <= 0) {
-            return std::nullopt;
-        }
-        if (ch == '\n') {
-            return line;
-        }
-        line.push_back(ch);
-    }
-}
-
 inline icss::protocol::FramedMessage wait_for_json_frame(int fd, int attempts = 20) {
+    static thread_local std::unordered_map<int, std::string> buffers;
+    auto& buffer = buffers[fd];
     for (int i = 0; i < attempts; ++i) {
-        const auto line = recv_json_line(fd);
-        if (line.has_value()) {
-            return icss::protocol::decode_json_frame(*line);
+        const auto newline = buffer.find('\n');
+        if (newline != std::string::npos) {
+            const auto line = buffer.substr(0, newline);
+            buffer.erase(0, newline + 1);
+            return icss::protocol::decode_json_frame(line);
+        }
+        char chunk[512];
+        const auto received = ::recv(fd, chunk, sizeof(chunk), 0);
+        if (received > 0) {
+            buffer.append(chunk, static_cast<std::size_t>(received));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
@@ -291,11 +286,11 @@ inline icss::protocol::FramedMessage wait_for_json_frame(int fd, int attempts = 
 
 inline std::vector<std::string> recv_udp_messages(int fd, std::size_t max_messages, int attempts = 20) {
     std::vector<std::string> messages;
-    char buffer[512];
+    char buffer[4096];
     sockaddr_in from {};
-    socklen_t len = sizeof(from);
     for (int attempt = 0; attempt < attempts && messages.empty(); ++attempt) {
         for (std::size_t i = 0; i < max_messages; ++i) {
+            socklen_t len = sizeof(from);
             const auto received = ::recvfrom(fd, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&from), &len);
             if (received <= 0) {
                 break;

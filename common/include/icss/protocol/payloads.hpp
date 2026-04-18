@@ -128,6 +128,16 @@ struct SnapshotPayload {
     float time_to_intercept_s {0.0F};
     bool tracking_active {false};
     int track_confidence_pct {0};
+    float track_estimated_x {0.0F};
+    float track_estimated_y {0.0F};
+    float track_estimated_vx {0.0F};
+    float track_estimated_vy {0.0F};
+    bool track_measurement_valid {false};
+    float track_measurement_x {0.0F};
+    float track_measurement_y {0.0F};
+    float track_covariance_trace {0.0F};
+    int track_measurement_age_ticks {0};
+    int track_missed_updates {0};
     std::string asset_status;
     std::string command_status;
     bool judgment_ready {false};

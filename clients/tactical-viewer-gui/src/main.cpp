@@ -9,8 +9,8 @@
 namespace icss::viewer_gui {
 namespace {
 
-void initialize_preview_state(ViewerState& state) {
-    state.planned_scenario = default_viewer_scenario();
+void initialize_preview_state(ViewerState& state, const ViewerOptions& options) {
+    state.planned_scenario = default_viewer_scenario(options.repo_root);
     state.snapshot.target.id = "target-alpha";
     state.snapshot.asset.id = "asset-interceptor";
     sync_preview_from_planned_scenario(state);
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
         }
 
         ViewerState state;
-        initialize_preview_state(state);
+        initialize_preview_state(state, options);
 
 #if !defined(_WIN32)
         UdpSocket socket(options.host);
@@ -65,6 +65,8 @@ int main(int argc, char** argv) {
         const auto frame_mode = parse_frame_mode(options.tcp_frame_format);
         std::uint64_t sequence = 1;
         send_viewer_join(socket, options, sequence);
+        state.control.last_message = "viewer registered";
+        state.last_join_attempt_ms = SDL_GetTicks64();
 #endif
 
         bool running = true;
@@ -83,7 +85,7 @@ int main(int argc, char** argv) {
                         if (x >= button.rect.x && x < button.rect.x + button.rect.w
                             && y >= button.rect.y && y < button.rect.y + button.rect.h) {
 #if !defined(_WIN32)
-                            perform_control_action(button.label, state, options, frame_mode, control_socket);
+                            perform_control_action(button.action, state, options, frame_mode, control_socket);
 #endif
                             break;
                         }
@@ -100,7 +102,15 @@ int main(int argc, char** argv) {
                 send_viewer_heartbeat(socket, options, sequence, state);
                 next_heartbeat = now + options.heartbeat_interval_ms;
             }
-            receive_datagrams(socket, state);
+            receive_datagrams(socket, state, now);
+            if ((state.received_snapshot || state.received_telemetry)
+                && state.last_datagram_received_ms > 0
+                && now > state.last_datagram_received_ms + (options.heartbeat_interval_ms * 2)
+                && now > state.last_join_attempt_ms + options.heartbeat_interval_ms) {
+                send_viewer_join(socket, options, sequence);
+                state.last_join_attempt_ms = now;
+                push_timeline_entry(state, "[viewer] rejoin requested after stale telemetry");
+            }
             if (options.auto_control_script) {
                 static const std::vector<std::string> kDefaultScript {
                     "Start", "Track", "Activate", "Command", "Stop", "Review", "Reset", "Start"
@@ -124,6 +134,7 @@ int main(int argc, char** argv) {
         }
 
         write_dump_state(options.dump_state_path, state);
+        write_dump_frame(renderer, options.dump_frame_path);
         std::printf("received_snapshot=%s\n", state.received_snapshot ? "true" : "false");
         std::printf("received_telemetry=%s\n", state.received_telemetry ? "true" : "false");
         std::printf("snapshot_sequence=%llu\n", static_cast<unsigned long long>(state.snapshot.header.snapshot_sequence));

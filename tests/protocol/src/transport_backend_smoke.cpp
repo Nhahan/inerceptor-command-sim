@@ -186,12 +186,32 @@ int main() {
     const auto start_ack = parse_command_ack(start_frame.payload);
     assert(start_ack.accepted);
 
-    send_binary_frame(tcp_client.fd, "scenario_start", serialize(ScenarioStartPayload{{1001U, 101U, 22U}, live_config.scenario.name}));
+    send_binary_frame(tcp_client.fd,
+                      "scenario_start",
+                      serialize(ScenarioStartPayload{{1001U, 101U, 22U},
+                                                     live_config.scenario.name,
+                                                     320,
+                                                     240,
+                                                     999,
+                                                     999,
+                                                     1,
+                                                     1,
+                                                     1,
+                                                     1,
+                                                     8,
+                                                     10,
+                                                     10,
+                                                     30}));
     const auto duplicate_start_frame = wait_for_binary_frame(*live, tcp_client.fd);
     assert(duplicate_start_frame.kind == "command_ack");
     const auto duplicate_start_ack = parse_command_ack(duplicate_start_frame.payload);
     assert(!duplicate_start_ack.accepted);
     assert(duplicate_start_ack.reason.find("initialized state") != std::string::npos);
+    const auto snapshot_after_duplicate_start = live->latest_snapshot();
+    assert(snapshot_after_duplicate_start.world_width == live_config.scenario.world_width);
+    assert(snapshot_after_duplicate_start.world_height == live_config.scenario.world_height);
+    assert(snapshot_after_duplicate_start.target_world_position.x != 999.0F);
+    assert(snapshot_after_duplicate_start.target_world_position.y != 999.0F);
 
     const auto heartbeat_wire_1 = serialize(ViewerHeartbeatPayload{{1001U, 201U, 2U}, 1U});
     assert(::sendto(udp_viewer.fd,

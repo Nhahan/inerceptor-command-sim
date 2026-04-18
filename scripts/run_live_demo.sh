@@ -13,6 +13,8 @@ viewer_duration_ms=""
 headless="false"
 scripted="false"
 font_path=""
+skip_build="false"
+preserve_existing="false"
 
 usage() {
   cat <<'EOF'
@@ -30,6 +32,8 @@ Options:
   --tick-sleep-ms MS        Server tick sleep in ms (default: 20)
   --viewer-duration-ms MS   Auto-close viewer after MS; default is 8000 in headless mode and unlimited otherwise
   --font PATH               Override GUI viewer font path
+  --skip-build              Do not configure/build before launching the demo
+  --preserve-existing       Do not kill repo-local server/viewer/console processes before launching
   --scripted                Also run the scripted command console flow in visible mode
   --headless                Run viewer with SDL dummy driver and dump state instead of opening a visible window
   --help                    Show this help
@@ -46,6 +50,8 @@ while [[ $# -gt 0 ]]; do
     --tick-sleep-ms) tick_sleep_ms="$2"; shift 2 ;;
     --viewer-duration-ms) viewer_duration_ms="$2"; shift 2 ;;
     --font) font_path="$2"; shift 2 ;;
+    --skip-build) skip_build="true"; shift ;;
+    --preserve-existing) preserve_existing="true"; shift ;;
     --scripted) scripted="true"; shift ;;
     --headless) headless="true"; shift ;;
     --help) usage; exit 0 ;;
@@ -53,20 +59,31 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -x "${repo_root}/build/icss_server" ]]; then
-  echo "missing build/icss_server; run cmake configure/build first" >&2
-  exit 1
+ensure_latest_binaries() {
+  if [[ ! -f "${repo_root}/build/CMakeCache.txt" ]]; then
+    cmake -S "${repo_root}" -B "${repo_root}/build" -DCMAKE_BUILD_TYPE=Debug
+  fi
+  cmake --build "${repo_root}/build" \
+    --target icss_server icss_tactical_viewer_gui icss_command_console icss_artifact_summary
+}
+
+stop_existing_demo_processes() {
+  pkill -f "${repo_root}/build/icss_server" 2>/dev/null || true
+  pkill -f "${repo_root}/build/icss_tactical_viewer_gui" 2>/dev/null || true
+  pkill -f "${repo_root}/build/icss_command_console" 2>/dev/null || true
+  sleep 0.2
+}
+
+if [[ "${skip_build}" != "true" ]]; then
+  ensure_latest_binaries
 fi
-if [[ ! -x "${repo_root}/build/icss_command_console" ]]; then
-  echo "missing build/icss_command_console; run cmake configure/build first" >&2
-  exit 1
+
+if [[ "${preserve_existing}" != "true" ]]; then
+  stop_existing_demo_processes
 fi
-if [[ ! -x "${repo_root}/build/icss_tactical_viewer_gui" ]]; then
-  echo "missing build/icss_tactical_viewer_gui; run cmake configure/build first" >&2
-  exit 1
-fi
-if [[ ! -x "${repo_root}/build/icss_artifact_summary" ]]; then
-  echo "missing build/icss_artifact_summary; run cmake configure/build first" >&2
+
+if [[ ! -x "${repo_root}/build/icss_server" || ! -x "${repo_root}/build/icss_command_console" || ! -x "${repo_root}/build/icss_tactical_viewer_gui" || ! -x "${repo_root}/build/icss_artifact_summary" ]]; then
+  echo "required demo binaries are missing after build" >&2
   exit 1
 fi
 
@@ -150,6 +167,7 @@ viewer_args=(
   --udp-port "${actual_udp_port}"
   --tcp-port "${actual_tcp_port}"
   --tcp-frame-format "${frame_format}"
+  --heartbeat-interval-ms "100"
   --duration-ms "${viewer_duration_ms}"
 )
 if [[ -n "${font_path}" ]]; then
@@ -170,6 +188,7 @@ if [[ "${scripted}" == "true" ]]; then
     --host "${host}" \
     --tcp-port "${actual_tcp_port}" \
     --tcp-frame-format "${frame_format}" \
+    --repo-root "${runtime_root}" \
     | tee "${console_log}"
 else
   echo "interactive_mode=true"

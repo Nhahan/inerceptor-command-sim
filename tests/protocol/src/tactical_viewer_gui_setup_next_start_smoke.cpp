@@ -45,8 +45,8 @@ ChildProcess spawn_gui_viewer(const std::filesystem::path& dump_path,
             "--tcp-port", tcp,
             "--headless",
             "--hidden",
-            "--auto-controls", "Timeout,Start,Track,Activate,Command",
-            "--duration-ms", "2200",
+            "--auto-controls", "Start,Track,target_pos_x_inc,target_pos_x_inc",
+            "--duration-ms", "1600",
             "--heartbeat-interval-ms", "100",
             "--dump-state", dump_path.string(),
         };
@@ -79,7 +79,7 @@ int main() {
     namespace fs = std::filesystem;
     namespace process = icss::testsupport::process;
 
-    const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_gui_profile_timeout_");
+    const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_gui_setup_next_start_");
     auto server = process::spawn_server_process({
         .repo_root = temp_root,
         .tcp_frame_format = "json",
@@ -88,7 +88,7 @@ int main() {
     });
     const auto startup = process::wait_for_startup(server);
 
-    const fs::path dump_path = temp_root / "viewer-timeout-profile.json";
+    const fs::path dump_path = temp_root / "viewer-setup-next-start.json";
     auto viewer = spawn_gui_viewer(dump_path, startup.udp_port, startup.tcp_port);
 
     const auto [viewer_exited, viewer_status] =
@@ -100,12 +100,12 @@ int main() {
 
     const auto dump_json = icss::testsupport::minijson::parse(read_text(dump_path));
     const auto& object = dump_json.as_object();
-    assert(icss::testsupport::minijson::require_field(object, "profile_label").as_string() == "Timeout");
-    assert(icss::testsupport::minijson::require_field(object, "interceptor_speed_per_tick").as_int() == 8);
-    assert(icss::testsupport::minijson::require_field(object, "engagement_timeout_ticks").as_int() == 10);
-    assert(icss::testsupport::minijson::require_field(object, "judgment_code").as_string() == "timeout_observed");
-    assert(icss::testsupport::minijson::require_field(object, "seeker_lock").as_bool() == false
-           || icss::testsupport::minijson::require_field(object, "off_boresight_deg").as_double() >= 0.0);
+    assert(icss::testsupport::minijson::require_field(object, "phase").as_string() == "tracking");
+    assert(icss::testsupport::minijson::require_field(object, "planned_target_start_x").as_int() == 112);
+    const auto target_world_x = icss::testsupport::minijson::require_field(object, "target_world_x").as_double();
+    assert(target_world_x != 112.0);
+    assert(icss::testsupport::minijson::require_field(object, "last_control_label").as_string() == "Setup");
+    assert(icss::testsupport::minijson::require_field(object, "last_control_message").as_string().find("target_start_x") != std::string::npos);
 
     ::kill(server.pid, SIGTERM);
     const auto [server_exited, server_status] =

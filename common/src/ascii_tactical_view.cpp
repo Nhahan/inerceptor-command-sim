@@ -56,14 +56,18 @@ std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
                                   const std::vector<icss::core::EventRecord>& recent_events,
                                   ReplayCursor cursor) {
     auto grid = make_grid();
-    place(grid,
-          scale_axis(snapshot.target.position.x, snapshot.world_width, kWidth),
-          scale_axis(snapshot.target.position.y, snapshot.world_height, kHeight),
-          'T');
-    place(grid,
-          scale_axis(snapshot.asset.position.x, snapshot.world_width, kWidth),
-          scale_axis(snapshot.asset.position.y, snapshot.world_height, kHeight),
-          'A');
+    if (snapshot.target.active) {
+        place(grid,
+              scale_axis(snapshot.target.position.x, snapshot.world_width, kWidth),
+              scale_axis(snapshot.target.position.y, snapshot.world_height, kHeight),
+              'T');
+    }
+    if (snapshot.asset.active) {
+        place(grid,
+              scale_axis(snapshot.asset.position.x, snapshot.world_width, kWidth),
+              scale_axis(snapshot.asset.position.y, snapshot.world_height, kHeight),
+              'A');
+    }
 
     std::ostringstream out;
     out << "=== Tactical Viewer ===\n";
@@ -79,6 +83,8 @@ std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
     out << "- phase=" << icss::core::to_string(snapshot.phase)
         << ", tracking=" << (snapshot.track.active ? "on" : "off")
         << " (confidence=" << snapshot.track.confidence_pct << "%)"
+        << ", covariance=" << std::fixed << std::setprecision(1) << snapshot.track.covariance_trace
+        << ", measurement_age=" << snapshot.track.measurement_age_ticks
         << ", interceptor_status=" << icss::core::to_string(snapshot.asset_status)
         << ", command_status=" << icss::core::to_string(snapshot.command_status)
         << ", judgment=" << icss::core::to_string(snapshot.judgment.code) << '\n';

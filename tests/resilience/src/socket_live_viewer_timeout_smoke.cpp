@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 
 #include "icss/core/runtime.hpp"
 #include "icss/net/transport.hpp"
@@ -139,8 +140,10 @@ int main() {
                     reinterpret_cast<sockaddr*>(&udp_server_addr), sizeof(udp_server_addr)) >= 0);
     live->poll_once();
 
-    live->advance_tick();
-    live->advance_tick();
+    std::this_thread::sleep_for(std::chrono::milliseconds(650));
+    for (int i = 0; i < 4; ++i) {
+        live->advance_tick();
+    }
     const auto snapshot = live->latest_snapshot();
     assert(snapshot.viewer_connection == ConnectionState::TimedOut);
     const auto frame = icss::view::render_tactical_frame(
@@ -152,6 +155,23 @@ int main() {
     assert(frame.find("snapshot_sequence=") != std::string::npos);
     const auto summary = live->summary();
     assert(summary.resilience_case.find("timeout_visibility") != std::string::npos);
+
+    assert(::sendto(udp_viewer.fd, viewer_join.data(), viewer_join.size(), 0,
+                    reinterpret_cast<sockaddr*>(&udp_server_addr), sizeof(udp_server_addr)) >= 0);
+    auto recovered = live->latest_snapshot();
+    const auto recovery_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < recovery_deadline) {
+        live->poll_once();
+        live->advance_tick();
+        recovered = live->latest_snapshot();
+        if (recovered.viewer_connection == ConnectionState::Reconnected
+            || recovered.viewer_connection == ConnectionState::Connected) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    assert(recovered.viewer_connection == ConnectionState::Reconnected
+           || recovered.viewer_connection == ConnectionState::Connected);
 
     fs::remove_all(temp_root);
 #endif

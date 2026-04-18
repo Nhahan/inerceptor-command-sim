@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 
@@ -12,6 +13,16 @@
 
 namespace icss::viewer_gui {
 namespace {
+
+std::filesystem::path resolve_repo_root(std::filesystem::path path) {
+    if (std::filesystem::exists(path / "configs/server.example.yaml")) {
+        return path;
+    }
+    if (std::filesystem::exists(path.parent_path() / "configs/server.example.yaml")) {
+        return path.parent_path();
+    }
+    return path;
+}
 
 std::filesystem::path default_font_path() {
     const std::vector<std::filesystem::path> candidates {
@@ -113,6 +124,10 @@ ViewerOptions parse_args(int argc, char** argv) {
             options.heartbeat_interval_ms = std::stoull(require_value(arg));
             continue;
         }
+        if (arg == "--repo-root") {
+            options.repo_root = require_value(arg);
+            continue;
+        }
         if (arg == "--tcp-frame-format") {
             options.tcp_frame_format = require_value(arg);
             continue;
@@ -132,6 +147,10 @@ ViewerOptions parse_args(int argc, char** argv) {
         }
         if (arg == "--dump-state") {
             options.dump_state_path = require_value(arg);
+            continue;
+        }
+        if (arg == "--dump-frame") {
+            options.dump_frame_path = require_value(arg);
             continue;
         }
         if (arg == "--font") {
@@ -154,9 +173,9 @@ ViewerOptions parse_args(int argc, char** argv) {
         if (arg == "--help") {
             std::printf(
                 "usage: icss_tactical_viewer_gui [--host HOST] [--udp-port PORT] [--tcp-port PORT]\n"
-                "       [--session-id ID] [--sender-id ID] [--duration-ms MS] [--heartbeat-interval-ms MS]\n"
+                "       [--session-id ID] [--sender-id ID] [--duration-ms MS] [--heartbeat-interval-ms MS] [--repo-root PATH]\n"
                 "       [--tcp-frame-format json|binary] [--width PX] [--height PX]\n"
-                "       [--dump-state PATH] [--font PATH] [--hidden] [--headless]\n"
+                "       [--dump-state PATH] [--dump-frame PATH] [--font PATH] [--hidden] [--headless]\n"
                 "       [--auto-control-script] [--auto-controls Start,Track,...]\n");
             std::exit(0);
         }
@@ -249,7 +268,7 @@ std::string phase_operator_note(icss::core::SessionPhase phase) {
     case icss::core::SessionPhase::Detecting:
         return "Target is present. Awaiting track confirmation.";
     case icss::core::SessionPhase::Tracking:
-        return "Track is valid. Interceptor can be prepared.";
+        return "Track lock acquired. Interceptor can be prepared.";
     case icss::core::SessionPhase::AssetReady:
         return "Interceptor ready. Operator can issue command.";
     case icss::core::SessionPhase::CommandIssued:
@@ -299,9 +318,12 @@ std::string authoritative_headline(const ViewerState& state) {
     if (!state.control.last_ok && state.control.last_label != "idle") {
         return "REJECTED CONTROL: " + uppercase_words(state.control.last_label);
     }
-    if (state.snapshot.command_status == icss::core::CommandLifecycle::Executing
-        || state.snapshot.command_status == icss::core::CommandLifecycle::Accepted) {
+    if (state.snapshot.command_status == icss::core::CommandLifecycle::Executing) {
         return "ACTIVE COMMAND: INTERCEPTOR ENGAGING";
+    }
+    if (state.snapshot.command_status == icss::core::CommandLifecycle::Accepted
+        || state.snapshot.phase == icss::core::SessionPhase::CommandIssued) {
+        return "COMMAND ACCEPTED: AWAITING LIVE ENGAGEMENT";
     }
     if (!state.recent_server_events.empty()) {
         return "LAST EVENT: " + uppercase_words(state.last_server_event_type);
@@ -316,9 +338,12 @@ std::string authoritative_badge_label(const ViewerState& state) {
     if (!state.control.last_ok && state.control.last_label != "idle") {
         return "REJECTED";
     }
-    if (state.snapshot.command_status == icss::core::CommandLifecycle::Executing
-        || state.snapshot.command_status == icss::core::CommandLifecycle::Accepted) {
+    if (state.snapshot.command_status == icss::core::CommandLifecycle::Executing) {
         return "ENGAGING";
+    }
+    if (state.snapshot.command_status == icss::core::CommandLifecycle::Accepted
+        || state.snapshot.phase == icss::core::SessionPhase::CommandIssued) {
+        return "ACCEPTED";
     }
     if (!state.recent_server_events.empty()) {
         return "LIVE";
@@ -333,9 +358,12 @@ SDL_Color authoritative_badge_color(const ViewerState& state) {
     if (!state.control.last_ok && state.control.last_label != "idle") {
         return SDL_Color {255, 99, 120, 255};
     }
-    if (state.snapshot.command_status == icss::core::CommandLifecycle::Executing
-        || state.snapshot.command_status == icss::core::CommandLifecycle::Accepted) {
+    if (state.snapshot.command_status == icss::core::CommandLifecycle::Executing) {
         return SDL_Color {255, 149, 0, 255};
+    }
+    if (state.snapshot.command_status == icss::core::CommandLifecycle::Accepted
+        || state.snapshot.phase == icss::core::SessionPhase::CommandIssued) {
+        return SDL_Color {255, 201, 107, 255};
     }
     if (!state.recent_server_events.empty()) {
         return SDL_Color {120, 190, 255, 255};
@@ -434,36 +462,132 @@ float heading_deg_gui(icss::core::Vec2f v) {
     return std::atan2(v.y, v.x) * 180.0F / 3.1415926535F;
 }
 
-icss::core::ScenarioConfig default_viewer_scenario() {
-    icss::core::ScenarioConfig scenario;
-    scenario.world_width = 576;
-    scenario.world_height = 384;
-    scenario.target_start_x = 80;
-    scenario.target_start_y = 300;
-    scenario.target_velocity_x = 5;
-    scenario.target_velocity_y = -3;
-    scenario.interceptor_start_x = 160;
-    scenario.interceptor_start_y = 60;
-    scenario.interceptor_speed_per_tick = 32;
-    scenario.intercept_radius = 24;
-    scenario.engagement_timeout_ticks = 60;
-    return scenario;
+icss::core::ScenarioConfig default_viewer_scenario(const std::filesystem::path& repo_root) {
+    try {
+        return icss::core::load_runtime_config(resolve_repo_root(repo_root)).scenario;
+    } catch (const std::exception&) {
+        return icss::core::ScenarioConfig {};
+    }
 }
 
-icss::core::ScenarioConfig scenario_profile(std::string_view profile_label) {
-    auto scenario = default_viewer_scenario();
-    if (profile_label == "Evasive") {
-        scenario.target_velocity_x = 7;
-        scenario.target_velocity_y = -5;
-        scenario.interceptor_speed_per_tick = 28;
-        scenario.engagement_timeout_ticks = 44;
-    } else if (profile_label == "Timeout") {
-        scenario.target_velocity_x = 7;
-        scenario.target_velocity_y = -4;
-        scenario.interceptor_speed_per_tick = 8;
-        scenario.engagement_timeout_ticks = 10;
+namespace {
+
+int clamp_int(int value, int lo, int hi) {
+    return std::max(lo, std::min(value, hi));
+}
+
+std::string setup_message(std::string_view field, int value) {
+    return std::string("next start ") + std::string(field) + " = " + std::to_string(value);
+}
+
+}  // namespace
+
+bool apply_parameter_action(ViewerState& state, std::string_view action) {
+    auto& scenario = state.planned_scenario;
+    auto update_preview = [&](std::string_view field, int value) {
+        const bool preview_allowed = !state.received_snapshot
+            || state.snapshot.phase == icss::core::SessionPhase::Initialized;
+        if (preview_allowed) {
+            sync_preview_from_planned_scenario(state);
+        }
+        state.control.last_ok = true;
+        state.control.last_label = "Setup";
+        state.control.last_message = setup_message(field, value);
+        state.review.visible = false;
+        push_timeline_entry(state, "[setup] " + std::string(field) + " -> " + std::to_string(value));
+    };
+
+    if (action == "target_pos_x_dec") {
+        scenario.target_start_x = clamp_int(scenario.target_start_x - 16, 0, scenario.world_width - 1);
+        update_preview("target_start_x", scenario.target_start_x);
+        return true;
     }
-    return scenario;
+    if (action == "target_pos_x_inc") {
+        scenario.target_start_x = clamp_int(scenario.target_start_x + 16, 0, scenario.world_width - 1);
+        update_preview("target_start_x", scenario.target_start_x);
+        return true;
+    }
+    if (action == "target_pos_y_dec") {
+        scenario.target_start_y = clamp_int(scenario.target_start_y - 16, 0, scenario.world_height - 1);
+        update_preview("target_start_y", scenario.target_start_y);
+        return true;
+    }
+    if (action == "target_pos_y_inc") {
+        scenario.target_start_y = clamp_int(scenario.target_start_y + 16, 0, scenario.world_height - 1);
+        update_preview("target_start_y", scenario.target_start_y);
+        return true;
+    }
+    if (action == "target_vel_x_dec") {
+        scenario.target_velocity_x = clamp_int(scenario.target_velocity_x - 1, -12, 12);
+        update_preview("target_velocity_x", scenario.target_velocity_x);
+        return true;
+    }
+    if (action == "target_vel_x_inc") {
+        scenario.target_velocity_x = clamp_int(scenario.target_velocity_x + 1, -12, 12);
+        update_preview("target_velocity_x", scenario.target_velocity_x);
+        return true;
+    }
+    if (action == "target_vel_y_dec") {
+        scenario.target_velocity_y = clamp_int(scenario.target_velocity_y - 1, -12, 12);
+        update_preview("target_velocity_y", scenario.target_velocity_y);
+        return true;
+    }
+    if (action == "target_vel_y_inc") {
+        scenario.target_velocity_y = clamp_int(scenario.target_velocity_y + 1, -12, 12);
+        update_preview("target_velocity_y", scenario.target_velocity_y);
+        return true;
+    }
+    if (action == "asset_pos_x_dec") {
+        scenario.interceptor_start_x = clamp_int(scenario.interceptor_start_x - 16, 0, scenario.world_width - 1);
+        update_preview("interceptor_start_x", scenario.interceptor_start_x);
+        return true;
+    }
+    if (action == "asset_pos_x_inc") {
+        scenario.interceptor_start_x = clamp_int(scenario.interceptor_start_x + 16, 0, scenario.world_width - 1);
+        update_preview("interceptor_start_x", scenario.interceptor_start_x);
+        return true;
+    }
+    if (action == "asset_pos_y_dec") {
+        scenario.interceptor_start_y = clamp_int(scenario.interceptor_start_y - 16, 0, scenario.world_height - 1);
+        update_preview("interceptor_start_y", scenario.interceptor_start_y);
+        return true;
+    }
+    if (action == "asset_pos_y_inc") {
+        scenario.interceptor_start_y = clamp_int(scenario.interceptor_start_y + 16, 0, scenario.world_height - 1);
+        update_preview("interceptor_start_y", scenario.interceptor_start_y);
+        return true;
+    }
+    if (action == "asset_speed_dec") {
+        scenario.interceptor_speed_per_tick = clamp_int(scenario.interceptor_speed_per_tick - 8, 4, 96);
+        update_preview("interceptor_speed_per_tick", scenario.interceptor_speed_per_tick);
+        return true;
+    }
+    if (action == "asset_speed_inc") {
+        scenario.interceptor_speed_per_tick = clamp_int(scenario.interceptor_speed_per_tick + 8, 4, 96);
+        update_preview("interceptor_speed_per_tick", scenario.interceptor_speed_per_tick);
+        return true;
+    }
+    if (action == "timeout_dec") {
+        scenario.engagement_timeout_ticks = clamp_int(scenario.engagement_timeout_ticks - 10, 10, 180);
+        update_preview("engagement_timeout_ticks", scenario.engagement_timeout_ticks);
+        return true;
+    }
+    if (action == "timeout_inc") {
+        scenario.engagement_timeout_ticks = clamp_int(scenario.engagement_timeout_ticks + 10, 10, 180);
+        update_preview("engagement_timeout_ticks", scenario.engagement_timeout_ticks);
+        return true;
+    }
+    return false;
+}
+
+bool is_live_control_action(std::string_view action) {
+    return action == "Start"
+        || action == "Track"
+        || action == "Activate"
+        || action == "Command"
+        || action == "Stop"
+        || action == "Reset"
+        || action == "Review";
 }
 
 std::string recommended_control_label(const ViewerState& state) {
@@ -489,8 +613,40 @@ std::string recommended_control_label(const ViewerState& state) {
     return "";
 }
 
-bool is_profile_button(std::string_view label) {
-    return label == "Balanced" || label == "Evasive" || label == "Timeout";
+bool target_motion_visual_visible(const ViewerState& state) {
+    return state.snapshot.track.active
+        && state.target_history.size() > 1
+        && std::sqrt(state.snapshot.target_velocity.x * state.snapshot.target_velocity.x
+            + state.snapshot.target_velocity.y * state.snapshot.target_velocity.y) > 0.1F;
+}
+
+bool asset_motion_visual_visible(const ViewerState& state) {
+    return state.snapshot.asset.active
+        && state.asset_history.size() > 1
+        && std::sqrt(state.snapshot.asset_velocity.x * state.snapshot.asset_velocity.x
+            + state.snapshot.asset_velocity.y * state.snapshot.asset_velocity.y) > 0.1F;
+}
+
+bool engagement_visual_visible(const ViewerState& state) {
+    return state.snapshot.target.active
+        && state.snapshot.asset.active
+        && state.snapshot.predicted_intercept_valid
+        && state.target_history.size() > 1
+        && state.asset_history.size() > 1
+        && (state.snapshot.phase == icss::core::SessionPhase::Engaging
+            || state.snapshot.command_status == icss::core::CommandLifecycle::Executing
+            || state.snapshot.command_status == icss::core::CommandLifecycle::Completed
+            || state.snapshot.judgment.ready);
+}
+
+bool predicted_marker_visual_visible(const ViewerState& state) {
+    return state.snapshot.predicted_intercept_valid;
+}
+
+bool command_visual_active(const ViewerState& state) {
+    return state.snapshot.command_status == icss::core::CommandLifecycle::Executing
+        || state.snapshot.command_status == icss::core::CommandLifecycle::Completed
+        || state.snapshot.judgment.ready;
 }
 
 void sync_preview_from_planned_scenario(ViewerState& state) {
@@ -520,6 +676,7 @@ void sync_preview_from_planned_scenario(ViewerState& state) {
     state.snapshot.predicted_intercept_valid = false;
     state.snapshot.predicted_intercept_position = {};
     state.snapshot.time_to_intercept_s = 0.0F;
+    state.snapshot.track = {};
 }
 
 void apply_snapshot(ViewerState& state, const icss::protocol::SnapshotPayload& payload) {
@@ -554,14 +711,17 @@ void apply_snapshot(ViewerState& state, const icss::protocol::SnapshotPayload& p
     state.snapshot.time_to_intercept_s = payload.time_to_intercept_s;
     state.snapshot.track.active = payload.tracking_active;
     state.snapshot.track.confidence_pct = payload.track_confidence_pct;
+    state.snapshot.track.estimated_position = {payload.track_estimated_x, payload.track_estimated_y};
+    state.snapshot.track.estimated_velocity = {payload.track_estimated_vx, payload.track_estimated_vy};
+    state.snapshot.track.measurement_valid = payload.track_measurement_valid;
+    state.snapshot.track.measurement_position = {payload.track_measurement_x, payload.track_measurement_y};
+    state.snapshot.track.covariance_trace = payload.track_covariance_trace;
+    state.snapshot.track.measurement_age_ticks = static_cast<std::uint32_t>(std::max(payload.track_measurement_age_ticks, 0));
+    state.snapshot.track.missed_updates = static_cast<std::uint32_t>(std::max(payload.track_missed_updates, 0));
     state.snapshot.asset_status = parse_asset_status(payload.asset_status);
     state.snapshot.command_status = parse_command_status(payload.command_status);
     state.snapshot.judgment.ready = payload.judgment_ready;
     state.snapshot.judgment.code = parse_judgment_code(payload.judgment_code);
-    state.command_visual_active = state.snapshot.command_status == icss::core::CommandLifecycle::Accepted
-        || state.snapshot.command_status == icss::core::CommandLifecycle::Executing
-        || state.snapshot.command_status == icss::core::CommandLifecycle::Completed
-        || state.snapshot.judgment.ready;
     state.review.available = review_available(state);
     state.received_snapshot = true;
     ++state.snapshot_count_received;
@@ -586,6 +746,10 @@ void apply_snapshot(ViewerState& state, const icss::protocol::SnapshotPayload& p
         while (state.asset_history.size() > 24) {
             state.asset_history.pop_front();
         }
+    }
+    if (state.snapshot.phase == icss::core::SessionPhase::Initialized) {
+        state.target_history.clear();
+        state.asset_history.clear();
     }
 }
 
