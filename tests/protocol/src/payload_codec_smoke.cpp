@@ -24,13 +24,14 @@ int main() {
     const auto parsed_leave = parse_session_leave(leave_wire);
     assert(parsed_leave.reason == "operator requested leave");
 
-    const ScenarioStartPayload start_payload {{1001U, 101U, 3U}, "basic_intercept_training", 576, 384, 80, 300, 5, -3, 160, 60, 14, 12, 26};
+    const ScenarioStartPayload start_payload {{1001U, 101U, 3U}, "basic_intercept_training", 576, 384, 80, 300, 5, -3, 160, 60, 32, 24, 60, 45};
     const auto start_wire = serialize(start_payload);
     const auto parsed_start = parse_scenario_start(start_wire);
     assert(parsed_start.scenario_name == "basic_intercept_training");
     assert(parsed_start.world_width == 576);
     assert(parsed_start.target_velocity_y == -3);
-    assert(parsed_start.interceptor_speed_per_tick == 14);
+    assert(parsed_start.interceptor_speed_per_tick == 32);
+    assert(parsed_start.seeker_fov_deg == 45);
 
     const ScenarioStopPayload stop_payload {{1001U, 101U, 4U}, "scenario stop requested"};
     const auto stop_wire = serialize(stop_payload);
@@ -82,15 +83,33 @@ int main() {
         true,
         4,
         6,
+        4.25F,
+        6.75F,
         5,
         -3,
+        5.0F,
+        -3.0F,
+        -31.0F,
         "asset-interceptor",
         true,
         8,
         2,
-        14,
-        12,
-        26,
+        8.50F,
+        2.25F,
+        10.25F,
+        1.50F,
+        8.3F,
+        32,
+        6.0F,
+        24,
+        60,
+        45.0F,
+        true,
+        9.0F,
+        true,
+        18.0F,
+        12.5F,
+        1.8F,
         true,
         82,
         "ready",
@@ -102,14 +121,23 @@ int main() {
     const auto parsed_snapshot = parse_snapshot(snapshot_wire);
     assert(parsed_snapshot.phase == "tracking");
     assert(parsed_snapshot.world_width == 576);
+    assert(parsed_snapshot.target_world_x > 4.0F);
+    assert(parsed_snapshot.asset_world_x > 8.0F);
     assert(parsed_snapshot.target_velocity_x == 5);
+    assert(parsed_snapshot.target_velocity_world_x == 5.0F);
+    assert(parsed_snapshot.target_heading_deg < 0.0F);
     assert(parsed_snapshot.target_active);
     assert(parsed_snapshot.target_x == 4);
     assert(parsed_snapshot.target_y == 6);
     assert(parsed_snapshot.asset_active);
     assert(parsed_snapshot.asset_x == 8);
     assert(parsed_snapshot.asset_y == 2);
-    assert(parsed_snapshot.interceptor_speed_per_tick == 14);
+    assert(parsed_snapshot.interceptor_speed_per_tick == 32);
+    assert(parsed_snapshot.seeker_fov_deg == 45.0F);
+    assert(parsed_snapshot.seeker_lock);
+    assert(parsed_snapshot.off_boresight_deg == 9.0F);
+    assert(parsed_snapshot.predicted_intercept_valid);
+    assert(parsed_snapshot.time_to_intercept_s > 1.0F);
     assert(parsed_snapshot.track_confidence_pct == 82);
     assert(parsed_snapshot.asset_status == "ready");
     assert(parsed_snapshot.command_status == "accepted");

@@ -82,6 +82,10 @@ std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
         << ", interceptor_status=" << icss::core::to_string(snapshot.asset_status)
         << ", command_status=" << icss::core::to_string(snapshot.command_status)
         << ", judgment=" << icss::core::to_string(snapshot.judgment.code) << '\n';
+    out << "- target_heading_deg=" << std::fixed << std::setprecision(1) << snapshot.target_heading_deg
+        << ", interceptor_heading_deg=" << snapshot.asset_heading_deg
+        << ", tti_s=" << snapshot.time_to_intercept_s
+        << ", predicted_intercept_valid=" << (snapshot.predicted_intercept_valid ? "yes" : "no") << '\n';
     out << "Telemetry:\n";
     out << "- connection=" << icss::core::to_string(snapshot.viewer_connection)
         << ", freshness=" << freshness_label_impl(snapshot)

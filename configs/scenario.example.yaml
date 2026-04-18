@@ -15,6 +15,7 @@ rules:
   target_velocity_y: -3
   interceptor_start_x: 160
   interceptor_start_y: 60
-  interceptor_speed_per_tick: 14
-  intercept_radius: 12
-  engagement_timeout_ticks: 26
+  interceptor_speed_per_tick: 32
+  intercept_radius: 24
+  engagement_timeout_ticks: 60
+  seeker_fov_deg: 45

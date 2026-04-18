@@ -17,19 +17,22 @@ using Object = std::unordered_map<std::string, Value>;
 using Array = std::vector<Value>;
 
 struct Value {
-    using Storage = std::variant<std::nullptr_t, bool, std::int64_t, std::string, Array, Object>;
+    using Storage = std::variant<std::nullptr_t, bool, std::int64_t, double, std::string, Array, Object>;
     Storage storage;
 
     [[nodiscard]] bool is_object() const { return std::holds_alternative<Object>(storage); }
     [[nodiscard]] bool is_array() const { return std::holds_alternative<Array>(storage); }
     [[nodiscard]] bool is_string() const { return std::holds_alternative<std::string>(storage); }
     [[nodiscard]] bool is_int() const { return std::holds_alternative<std::int64_t>(storage); }
+    [[nodiscard]] bool is_double() const { return std::holds_alternative<double>(storage); }
     [[nodiscard]] bool is_bool() const { return std::holds_alternative<bool>(storage); }
+    [[nodiscard]] bool is_number() const { return is_int() || is_double(); }
 
     [[nodiscard]] const Object& as_object() const { return std::get<Object>(storage); }
     [[nodiscard]] const Array& as_array() const { return std::get<Array>(storage); }
     [[nodiscard]] const std::string& as_string() const { return std::get<std::string>(storage); }
     [[nodiscard]] std::int64_t as_int() const { return std::get<std::int64_t>(storage); }
+    [[nodiscard]] double as_double() const { return is_double() ? std::get<double>(storage) : static_cast<double>(std::get<std::int64_t>(storage)); }
     [[nodiscard]] bool as_bool() const { return std::get<bool>(storage); }
 };
 
@@ -60,7 +63,7 @@ public:
             return Value {nullptr};
         }
         if (ch == '-' || std::isdigit(static_cast<unsigned char>(ch))) {
-            return Value {parse_int()};
+            return parse_number();
         }
         throw std::runtime_error("unsupported json token");
     }
@@ -117,7 +120,7 @@ private:
         throw std::runtime_error("unterminated json string");
     }
 
-    std::int64_t parse_int() {
+    Value parse_number() {
         skip_ws();
         std::size_t start = cursor_;
         if (text_[cursor_] == '-') {
@@ -126,7 +129,19 @@ private:
         while (cursor_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[cursor_]))) {
             ++cursor_;
         }
-        return std::stoll(std::string{text_.substr(start, cursor_ - start)});
+        bool is_float = false;
+        if (cursor_ < text_.size() && text_[cursor_] == '.') {
+            is_float = true;
+            ++cursor_;
+            while (cursor_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[cursor_]))) {
+                ++cursor_;
+            }
+        }
+        const auto token = std::string{text_.substr(start, cursor_ - start)};
+        if (is_float) {
+            return Value {std::stod(token)};
+        }
+        return Value {std::stoll(token)};
     }
 
     bool parse_bool() {

@@ -139,6 +139,7 @@ ScenarioConfig load_scenario_config(const std::filesystem::path& file) {
         else if (starts_with(line, "interceptor_speed_per_tick:")) config.interceptor_speed_per_tick = parse_int(value_after_colon(line));
         else if (starts_with(line, "intercept_radius:")) config.intercept_radius = parse_int(value_after_colon(line));
         else if (starts_with(line, "engagement_timeout_ticks:")) config.engagement_timeout_ticks = parse_int(value_after_colon(line));
+        else if (starts_with(line, "seeker_fov_deg:")) config.seeker_fov_deg = parse_int(value_after_colon(line));
     }
     return config;
 }
@@ -194,6 +195,7 @@ void validate_runtime_config(const RuntimeConfig& config) {
     require_positive("scenario.interceptor_speed_per_tick", config.scenario.interceptor_speed_per_tick);
     require_positive("scenario.intercept_radius", config.scenario.intercept_radius);
     require_positive("scenario.engagement_timeout_ticks", config.scenario.engagement_timeout_ticks);
+    require_positive("scenario.seeker_fov_deg", config.scenario.seeker_fov_deg);
     if (config.scenario.target_start_x < 0 || config.scenario.target_start_x >= config.scenario.world_width) {
         throw std::runtime_error("scenario.target_start_x must fit inside world_width");
     }

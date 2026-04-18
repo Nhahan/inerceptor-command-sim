@@ -19,9 +19,10 @@ int main() {
     assert(config.scenario.world_height == 384);
     assert(config.scenario.target_velocity_x == 5);
     assert(config.scenario.target_velocity_y == -3);
-    assert(config.scenario.interceptor_speed_per_tick == 14);
-    assert(config.scenario.intercept_radius == 12);
-    assert(config.scenario.engagement_timeout_ticks == 26);
+    assert(config.scenario.interceptor_speed_per_tick == 32);
+    assert(config.scenario.intercept_radius == 24);
+    assert(config.scenario.engagement_timeout_ticks == 60);
+    assert(config.scenario.seeker_fov_deg == 45);
     assert(config.logging.level == "info");
     assert(config.logging.aar_enabled);
     assert(config.logging.aar_output_dir == fs::path{"assets/sample-aar"});

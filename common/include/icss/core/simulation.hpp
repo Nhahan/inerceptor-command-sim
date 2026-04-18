@@ -76,6 +76,12 @@ private:
     bool timeout_exercised_ {false};
     bool packet_gap_exercised_ {false};
     std::optional<std::uint64_t> engagement_started_tick_;
+    Vec2f target_world_ {};
+    Vec2f asset_world_ {};
+    Vec2f target_velocity_world_ {};
+    Vec2f asset_velocity_world_ {};
+    bool seeker_lock_ {false};
+    float off_boresight_deg_ {0.0F};
     std::vector<EventRecord> events_;
     std::vector<Snapshot> snapshots_;
 };

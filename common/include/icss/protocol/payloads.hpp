@@ -32,9 +32,10 @@ struct ScenarioStartPayload {
     int target_velocity_y {-3};
     int interceptor_start_x {160};
     int interceptor_start_y {60};
-    int interceptor_speed_per_tick {14};
-    int intercept_radius {12};
-    int engagement_timeout_ticks {26};
+    int interceptor_speed_per_tick {32};
+    int intercept_radius {24};
+    int engagement_timeout_ticks {60};
+    int seeker_fov_deg {45};
 };
 
 struct ScenarioStopPayload {
@@ -98,15 +99,33 @@ struct SnapshotPayload {
     bool target_active {false};
     int target_x {0};
     int target_y {0};
+    float target_world_x {0.0F};
+    float target_world_y {0.0F};
     int target_velocity_x {0};
     int target_velocity_y {0};
+    float target_velocity_world_x {0.0F};
+    float target_velocity_world_y {0.0F};
+    float target_heading_deg {0.0F};
     std::string asset_id;
     bool asset_active {false};
     int asset_x {0};
     int asset_y {0};
+    float asset_world_x {0.0F};
+    float asset_world_y {0.0F};
+    float asset_velocity_world_x {0.0F};
+    float asset_velocity_world_y {0.0F};
+    float asset_heading_deg {0.0F};
     int interceptor_speed_per_tick {0};
+    float interceptor_acceleration_per_tick {0.0F};
     int intercept_radius {0};
     int engagement_timeout_ticks {0};
+    float seeker_fov_deg {0.0F};
+    bool seeker_lock {false};
+    float off_boresight_deg {0.0F};
+    bool predicted_intercept_valid {false};
+    float predicted_intercept_x {0.0F};
+    float predicted_intercept_y {0.0F};
+    float time_to_intercept_s {0.0F};
     bool tracking_active {false};
     int track_confidence_pct {0};
     std::string asset_status;

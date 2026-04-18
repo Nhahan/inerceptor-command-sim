@@ -59,9 +59,15 @@ if(ICSS_ENABLE_GUI_VIEWER)
         pkg_check_modules(ICSS_SDL2_TTF QUIET SDL2_ttf)
     endif()
     if(ICSS_SDL2_FOUND AND ICSS_SDL2_TTF_FOUND)
-        add_executable(icss_tactical_viewer_gui clients/tactical-viewer-gui/src/main.cpp)
+        add_executable(icss_tactical_viewer_gui
+            clients/tactical-viewer-gui/src/main.cpp
+            clients/tactical-viewer-gui/src/app_support.cpp
+            clients/tactical-viewer-gui/src/app_net.cpp
+            clients/tactical-viewer-gui/src/app_control.cpp
+            clients/tactical-viewer-gui/src/app_render.cpp)
         target_link_directories(icss_tactical_viewer_gui PRIVATE ${ICSS_SDL2_LIBRARY_DIRS} ${ICSS_SDL2_TTF_LIBRARY_DIRS})
         target_include_directories(icss_tactical_viewer_gui PRIVATE
+            clients/tactical-viewer-gui/src
             ${ICSS_SDL2_INCLUDE_DIRS}
             ${ICSS_SDL2_TTF_INCLUDE_DIRS})
         target_link_libraries(icss_tactical_viewer_gui PRIVATE icss_core ${ICSS_SDL2_LIBRARIES} ${ICSS_SDL2_TTF_LIBRARIES})

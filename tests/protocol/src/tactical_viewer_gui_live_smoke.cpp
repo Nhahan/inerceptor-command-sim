@@ -154,7 +154,12 @@ int main() {
     assert(target_velocity_x == 5 || target_velocity_x == -5);
     const auto target_velocity_y = icss::testsupport::minijson::require_field(object, "target_velocity_y").as_int();
     assert(target_velocity_y == -3 || target_velocity_y == 3);
-    assert(icss::testsupport::minijson::require_field(object, "interceptor_speed_per_tick").as_int() == 14);
+    assert(icss::testsupport::minijson::require_field(object, "interceptor_speed_per_tick").as_int() == 32);
+    assert(icss::testsupport::minijson::require_field(object, "interceptor_acceleration_per_tick").is_number());
+    assert(icss::testsupport::minijson::require_field(object, "seeker_fov_deg").is_number());
+    assert(icss::testsupport::minijson::require_field(object, "target_world_x").is_number());
+    assert(icss::testsupport::minijson::require_field(object, "time_to_intercept_s").is_number());
+    assert(icss::testsupport::minijson::require_field(object, "predicted_intercept_valid").as_bool());
     assert(icss::testsupport::minijson::require_field(object, "recent_event_count").as_int() >= 2);
 
     ::kill(server.pid, SIGTERM);

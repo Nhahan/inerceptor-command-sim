@@ -101,9 +101,11 @@ int main() {
     const auto dump_json = icss::testsupport::minijson::parse(read_text(dump_path));
     const auto& object = dump_json.as_object();
     assert(icss::testsupport::minijson::require_field(object, "profile_label").as_string() == "Timeout");
-    assert(icss::testsupport::minijson::require_field(object, "interceptor_speed_per_tick").as_int() == 6);
-    assert(icss::testsupport::minijson::require_field(object, "engagement_timeout_ticks").as_int() == 8);
+    assert(icss::testsupport::minijson::require_field(object, "interceptor_speed_per_tick").as_int() == 8);
+    assert(icss::testsupport::minijson::require_field(object, "engagement_timeout_ticks").as_int() == 10);
     assert(icss::testsupport::minijson::require_field(object, "judgment_code").as_string() == "timeout_observed");
+    assert(icss::testsupport::minijson::require_field(object, "seeker_lock").as_bool() == false
+           || icss::testsupport::minijson::require_field(object, "off_boresight_deg").as_double() >= 0.0);
 
     ::kill(server.pid, SIGTERM);
     const auto [server_exited, server_status] =

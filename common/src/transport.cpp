@@ -63,15 +63,33 @@ icss::protocol::SnapshotPayload to_snapshot_payload(const icss::core::Snapshot& 
         snapshot.target.active,
         snapshot.target.position.x,
         snapshot.target.position.y,
+        snapshot.target_world_position.x,
+        snapshot.target_world_position.y,
         snapshot.target_velocity_x,
         snapshot.target_velocity_y,
+        snapshot.target_velocity.x,
+        snapshot.target_velocity.y,
+        snapshot.target_heading_deg,
         snapshot.asset.id,
         snapshot.asset.active,
         snapshot.asset.position.x,
         snapshot.asset.position.y,
+        snapshot.asset_world_position.x,
+        snapshot.asset_world_position.y,
+        snapshot.asset_velocity.x,
+        snapshot.asset_velocity.y,
+        snapshot.asset_heading_deg,
         snapshot.interceptor_speed_per_tick,
+        snapshot.interceptor_acceleration_per_tick,
         snapshot.intercept_radius,
         snapshot.engagement_timeout_ticks,
+        snapshot.seeker_fov_deg,
+        snapshot.seeker_lock,
+        snapshot.off_boresight_deg,
+        snapshot.predicted_intercept_valid,
+        snapshot.predicted_intercept_position.x,
+        snapshot.predicted_intercept_position.y,
+        snapshot.time_to_intercept_s,
         snapshot.track.active,
         snapshot.track.confidence_pct,
         icss::core::to_string(snapshot.asset_status),
@@ -741,6 +759,7 @@ private:
             scenario.interceptor_speed_per_tick = payload.interceptor_speed_per_tick;
             scenario.intercept_radius = payload.intercept_radius;
             scenario.engagement_timeout_ticks = payload.engagement_timeout_ticks;
+            scenario.seeker_fov_deg = payload.seeker_fov_deg;
             auto candidate = config_;
             candidate.scenario = scenario;
             try {

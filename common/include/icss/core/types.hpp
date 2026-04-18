@@ -60,6 +60,11 @@ struct Vec2 {
     int y {};
 };
 
+struct Vec2f {
+    float x {};
+    float y {};
+};
+
 struct EntityState {
     std::string id;
     Vec2 position {};
@@ -99,11 +104,24 @@ struct Snapshot {
     int world_height {384};
     EntityState target;
     EntityState asset;
+    Vec2f target_world_position {};
+    Vec2f asset_world_position {};
     int target_velocity_x {0};
     int target_velocity_y {0};
+    Vec2f target_velocity {};
+    Vec2f asset_velocity {};
+    float target_heading_deg {0.0F};
+    float asset_heading_deg {0.0F};
     int interceptor_speed_per_tick {0};
+    float interceptor_acceleration_per_tick {0.0F};
     int intercept_radius {0};
     int engagement_timeout_ticks {0};
+    float seeker_fov_deg {0.0F};
+    bool seeker_lock {false};
+    float off_boresight_deg {0.0F};
+    bool predicted_intercept_valid {false};
+    Vec2f predicted_intercept_position {};
+    float time_to_intercept_s {0.0F};
     TrackState track;
     AssetStatus asset_status {AssetStatus::Idle};
     CommandLifecycle command_status {CommandLifecycle::None};

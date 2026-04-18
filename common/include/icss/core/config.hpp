@@ -26,17 +26,18 @@ struct ScenarioConfig {
     int assets {1};
     bool enable_replay {true};
     int telemetry_interval_ms {200};
-    int world_width {24};
-    int world_height {16};
-    int target_start_x {3};
-    int target_start_y {13};
-    int target_velocity_x {1};
-    int target_velocity_y {-1};
-    int interceptor_start_x {10};
-    int interceptor_start_y {2};
-    int interceptor_speed_per_tick {4};
-    int intercept_radius {1};
-    int engagement_timeout_ticks {8};
+    int world_width {576};
+    int world_height {384};
+    int target_start_x {80};
+    int target_start_y {300};
+    int target_velocity_x {5};
+    int target_velocity_y {-3};
+    int interceptor_start_x {160};
+    int interceptor_start_y {60};
+    int interceptor_speed_per_tick {32};
+    int intercept_radius {24};
+    int engagement_timeout_ticks {60};
+    int seeker_fov_deg {45};
 };
 
 struct LoggingConfig {

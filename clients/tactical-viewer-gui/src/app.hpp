@@ -1,0 +1,194 @@
+#pragma once
+
+#include <cstdint>
+#include <deque>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "icss/core/config.hpp"
+#include "icss/core/types.hpp"
+#include "icss/protocol/frame_codec.hpp"
+#include "icss/protocol/payloads.hpp"
+
+#include <SDL.h>
+#include <SDL_ttf.h>
+
+namespace icss::viewer_gui {
+
+struct ViewerOptions {
+    std::string host {"127.0.0.1"};
+    std::uint16_t udp_port {4001};
+    std::uint16_t tcp_port {4000};
+    std::uint32_t session_id {1001U};
+    std::uint32_t sender_id {201U};
+    std::uint64_t duration_ms {0};
+    std::uint64_t heartbeat_interval_ms {1000};
+    int width {1360};
+    int height {860};
+    bool hidden {false};
+    bool headless {false};
+    bool auto_control_script {false};
+    std::string tcp_frame_format {"json"};
+    std::vector<std::string> auto_controls;
+    std::filesystem::path dump_state_path;
+    std::filesystem::path font_path;
+};
+
+struct ControlState {
+    bool connected {false};
+    bool last_ok {false};
+    std::string last_label {"idle"};
+    std::string last_message {"control panel idle"};
+    std::uint64_t sequence {1};
+    std::size_t auto_step {0};
+    std::uint64_t auto_last_action_ms {0};
+};
+
+struct ReviewState {
+    bool available {false};
+    bool loaded {false};
+    bool visible {false};
+    std::uint64_t cursor_index {0};
+    std::uint64_t total_events {0};
+    std::string judgment_code {"pending"};
+    std::string resilience_case {"none"};
+    std::string event_type {"none"};
+    std::string event_summary {"review not requested"};
+};
+
+struct ViewerState {
+    icss::core::Snapshot snapshot {};
+    icss::core::ScenarioConfig planned_scenario {};
+    bool received_snapshot {false};
+    bool received_telemetry {false};
+    std::deque<std::string> recent_server_events;
+    std::uint64_t heartbeat_id {0};
+    std::uint64_t heartbeat_count {0};
+    std::uint64_t snapshot_count_received {0};
+    std::uint64_t telemetry_count_received {0};
+    std::uint64_t last_server_event_tick {0};
+    std::string last_server_event_type {"none"};
+    std::string last_server_event_summary {"no server event"};
+    std::deque<icss::core::Vec2> target_history;
+    std::deque<icss::core::Vec2> asset_history;
+    bool command_visual_active {false};
+    ControlState control;
+    ReviewState review;
+    std::string profile_label {"Balanced"};
+};
+
+struct Button {
+    std::string label;
+    SDL_Rect rect {};
+};
+
+struct GuiLayout {
+    SDL_Rect header_panel {};
+    SDL_Rect phase_strip {};
+    SDL_Rect map_rect {};
+    SDL_Rect entity_panel {};
+    int panel_x {0};
+    SDL_Rect phase_panel {};
+    SDL_Rect decision_panel {};
+    SDL_Rect resilience_panel {};
+    SDL_Rect control_panel {};
+    SDL_Rect event_panel {};
+    std::vector<Button> buttons;
+};
+
+void push_timeline_entry(ViewerState& state, std::string message);
+std::string escape_json(std::string_view input);
+ViewerOptions parse_args(int argc, char** argv);
+
+icss::core::AssetStatus parse_asset_status(std::string_view value);
+icss::core::CommandLifecycle parse_command_status(std::string_view value);
+icss::core::JudgmentCode parse_judgment_code(std::string_view value);
+icss::core::ConnectionState parse_connection_state(std::string_view value);
+icss::core::SessionPhase parse_phase(std::string_view value);
+std::string uppercase_words(std::string_view value);
+std::string phase_banner_label(icss::core::SessionPhase phase);
+std::string phase_operator_note(icss::core::SessionPhase phase);
+SDL_Color phase_accent(icss::core::SessionPhase phase);
+std::string resilience_summary(const ViewerState& state);
+std::string authoritative_headline(const ViewerState& state);
+std::string authoritative_badge_label(const ViewerState& state);
+SDL_Color authoritative_badge_color(const ViewerState& state);
+bool review_available(const ViewerState& state);
+std::string review_panel_text(const ViewerState& state);
+std::string terminal_timeline_text(const ViewerState& state, bool review_mode);
+std::string control_timeline_message(std::string_view label, bool ok, std::string_view message);
+std::string latest_timeline_entry(const ViewerState& state);
+std::string telemetry_event_status(const ViewerState& state);
+std::string format_fixed_1(float value);
+std::string format_fixed_0(std::uint32_t value);
+float heading_deg_gui(icss::core::Vec2f v);
+icss::core::ScenarioConfig default_viewer_scenario();
+icss::core::ScenarioConfig scenario_profile(std::string_view profile_label);
+std::string recommended_control_label(const ViewerState& state);
+bool is_profile_button(std::string_view label);
+void sync_preview_from_planned_scenario(ViewerState& state);
+void apply_snapshot(ViewerState& state, const icss::protocol::SnapshotPayload& payload);
+void apply_telemetry(ViewerState& state, const icss::protocol::TelemetryPayload& payload);
+
+#if !defined(_WIN32)
+enum class FrameMode {
+    Json,
+    Binary,
+};
+
+class UdpSocket {
+public:
+    explicit UdpSocket(const std::string& host);
+    ~UdpSocket();
+    [[nodiscard]] int get() const;
+private:
+    int fd_ {-1};
+};
+
+class TcpSocket {
+public:
+    TcpSocket() = default;
+    ~TcpSocket();
+    void connect_to(const std::string& host, std::uint16_t port);
+    void reset();
+    [[nodiscard]] bool connected() const;
+    [[nodiscard]] int fd() const;
+private:
+    int fd_ {-1};
+};
+
+FrameMode parse_frame_mode(std::string_view value);
+void send_viewer_join(UdpSocket& socket, const ViewerOptions& options, std::uint64_t& sequence);
+void send_viewer_heartbeat(UdpSocket& socket, const ViewerOptions& options, std::uint64_t& sequence, ViewerState& state);
+void receive_datagrams(UdpSocket& socket, ViewerState& state);
+void send_frame(TcpSocket& socket, FrameMode mode, std::string_view kind, std::string_view payload);
+icss::protocol::FramedMessage recv_frame(TcpSocket& socket, FrameMode mode);
+void ensure_control_connected(TcpSocket& socket, ViewerState& state, const ViewerOptions& options, FrameMode mode);
+void perform_control_action(std::string_view action_label,
+                            ViewerState& state,
+                            const ViewerOptions& options,
+                            FrameMode frame_mode,
+                            TcpSocket& control_socket);
+#endif
+
+SDL_Color rgba(Uint8 r, Uint8 g, Uint8 b, Uint8 a = 255);
+void fill_panel(SDL_Renderer* renderer, const SDL_Rect& rect, SDL_Color fill, SDL_Color border);
+void draw_text(SDL_Renderer* renderer,
+               TTF_Font* font,
+               int x,
+               int y,
+               SDL_Color color,
+               const std::string& text,
+               int wrap_width = 0);
+GuiLayout build_layout(const ViewerOptions& options);
+void render_gui(SDL_Renderer* renderer,
+                TTF_Font* title_font,
+                TTF_Font* body_font,
+                const ViewerState& state,
+                const ViewerOptions& options);
+void write_dump_state(const std::filesystem::path& path, const ViewerState& state);
+
+}  // namespace icss::viewer_gui

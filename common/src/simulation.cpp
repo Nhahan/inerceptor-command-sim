@@ -1,6 +1,7 @@
 #include "icss/core/simulation.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -40,24 +41,61 @@ std::vector<EventRecord> recent_events_for_artifact(const std::vector<EventRecor
     return recent;
 }
 
-void bounce_position_axis(int& position, int& velocity, int limit) {
-    if (limit <= 1 || velocity == 0) {
-        position = std::clamp(position, 0, std::max(0, limit - 1));
+float clampf(float value, float lo, float hi) {
+    return std::max(lo, std::min(value, hi));
+}
+
+void bounce_world_axis(float& position, float& velocity, float limit) {
+    if (limit <= 1.0F || velocity == 0.0F) {
+        position = clampf(position, 0.0F, std::max(0.0F, limit - 1.0F));
         return;
     }
     position += velocity;
-    if (position < 0) {
+    if (position < 0.0F) {
         position = -position;
-        velocity *= -1;
-    } else if (position >= limit) {
-        position = (limit - 1) - (position - (limit - 1));
-        velocity *= -1;
+        velocity *= -1.0F;
+    } else if (position > limit - 1.0F) {
+        position = (limit - 1.0F) - (position - (limit - 1.0F));
+        velocity *= -1.0F;
     }
-    position = std::clamp(position, 0, limit - 1);
+    position = clampf(position, 0.0F, limit - 1.0F);
 }
 
-int manhattan_distance(const Vec2& lhs, const Vec2& rhs) {
-    return std::abs(lhs.x - rhs.x) + std::abs(lhs.y - rhs.y);
+float length(Vec2f v) {
+    return std::sqrt(v.x * v.x + v.y * v.y);
+}
+
+Vec2f subtract(Vec2f a, Vec2f b) {
+    return {a.x - b.x, a.y - b.y};
+}
+
+Vec2f add(Vec2f a, Vec2f b) {
+    return {a.x + b.x, a.y + b.y};
+}
+
+Vec2f scale(Vec2f v, float s) {
+    return {v.x * s, v.y * s};
+}
+
+Vec2f normalize(Vec2f v) {
+    const auto len = length(v);
+    if (len <= 1e-5F) {
+        return {0.0F, 0.0F};
+    }
+    return {v.x / len, v.y / len};
+}
+
+float heading_deg(Vec2f v) {
+    if (std::abs(v.x) <= 1e-5F && std::abs(v.y) <= 1e-5F) {
+        return 0.0F;
+    }
+    return std::atan2(v.y, v.x) * 180.0F / 3.1415926535F;
+}
+
+float normalize_angle_deg(float value) {
+    while (value > 180.0F) value -= 360.0F;
+    while (value < -180.0F) value += 360.0F;
+    return value;
 }
 
 }  // namespace
@@ -70,8 +108,14 @@ SimulationSession::SimulationSession(std::uint32_t session_id,
       tick_rate_hz_(tick_rate_hz),
       telemetry_interval_ms_(telemetry_interval_ms),
       scenario_(std::move(scenario)),
-      target_({"target-alpha", {scenario_.target_start_x, scenario_.target_start_y}, false}),
-      asset_({"asset-interceptor", {scenario_.interceptor_start_x, scenario_.interceptor_start_y}, false}) {}
+    target_({"target-alpha", {scenario_.target_start_x, scenario_.target_start_y}, false}),
+    asset_({"asset-interceptor", {scenario_.interceptor_start_x, scenario_.interceptor_start_y}, false}),
+    target_world_({static_cast<float>(scenario_.target_start_x), static_cast<float>(scenario_.target_start_y)}),
+    asset_world_({static_cast<float>(scenario_.interceptor_start_x), static_cast<float>(scenario_.interceptor_start_y)}),
+    target_velocity_world_({static_cast<float>(scenario_.target_velocity_x), static_cast<float>(scenario_.target_velocity_y)}),
+      asset_velocity_world_({0.0F, 0.0F}),
+      seeker_lock_(false),
+      off_boresight_deg_(0.0F) {}
 
 void SimulationSession::connect_client(ClientRole role, std::uint32_t sender_id) {
     auto& state = client(role);
@@ -149,6 +193,12 @@ CommandResult SimulationSession::start_scenario() {
 
 void SimulationSession::configure_scenario(ScenarioConfig scenario) {
     scenario_ = std::move(scenario);
+    target_world_ = {static_cast<float>(scenario_.target_start_x), static_cast<float>(scenario_.target_start_y)};
+    asset_world_ = {static_cast<float>(scenario_.interceptor_start_x), static_cast<float>(scenario_.interceptor_start_y)};
+    target_velocity_world_ = {static_cast<float>(scenario_.target_velocity_x), static_cast<float>(scenario_.target_velocity_y)};
+    asset_velocity_world_ = {0.0F, 0.0F};
+    seeker_lock_ = false;
+    off_boresight_deg_ = 0.0F;
     target_.position = {scenario_.target_start_x, scenario_.target_start_y};
     target_.active = false;
     asset_.position = {scenario_.interceptor_start_x, scenario_.interceptor_start_y};
@@ -165,6 +215,12 @@ CommandResult SimulationSession::reset_session(std::string) {
     sequence_ = 0;
     clock_ms_ = 1'776'327'000'000ULL;
     phase_ = SessionPhase::Initialized;
+    target_world_ = {static_cast<float>(scenario_.target_start_x), static_cast<float>(scenario_.target_start_y)};
+    asset_world_ = {static_cast<float>(scenario_.interceptor_start_x), static_cast<float>(scenario_.interceptor_start_y)};
+    target_velocity_world_ = {static_cast<float>(scenario_.target_velocity_x), static_cast<float>(scenario_.target_velocity_y)};
+    asset_velocity_world_ = {0.0F, 0.0F};
+    seeker_lock_ = false;
+    off_boresight_deg_ = 0.0F;
     target_ = {"target-alpha", {scenario_.target_start_x, scenario_.target_start_y}, false};
     asset_ = {"asset-interceptor", {scenario_.interceptor_start_x, scenario_.interceptor_start_y}, false};
     track_ = {};
@@ -263,8 +319,10 @@ void SimulationSession::advance_tick() {
     ++tick_;
 
     if (target_.active) {
-        bounce_position_axis(target_.position.x, scenario_.target_velocity_x, scenario_.world_width);
-        bounce_position_axis(target_.position.y, scenario_.target_velocity_y, scenario_.world_height);
+        bounce_world_axis(target_world_.x, target_velocity_world_.x, static_cast<float>(scenario_.world_width));
+        bounce_world_axis(target_world_.y, target_velocity_world_.y, static_cast<float>(scenario_.world_height));
+        target_.position.x = static_cast<int>(std::lround(target_world_.x));
+        target_.position.y = static_cast<int>(std::lround(target_world_.y));
     }
 
     if (command_status_ == CommandLifecycle::Accepted && phase_ == SessionPhase::CommandIssued) {
@@ -274,26 +332,37 @@ void SimulationSession::advance_tick() {
     }
 
     if (phase_ == SessionPhase::Engaging && asset_.active) {
-        int remaining = scenario_.interceptor_speed_per_tick;
-        while (remaining > 0) {
-            const auto dx = target_.position.x - asset_.position.x;
-            const auto dy = target_.position.y - asset_.position.y;
-            if (dx == 0 && dy == 0) {
-                break;
-            }
-            if (std::abs(dx) >= std::abs(dy) && dx != 0) {
-                asset_.position.x += (dx > 0 ? 1 : -1);
-            } else if (dy != 0) {
-                asset_.position.y += (dy > 0 ? 1 : -1);
-            }
-            --remaining;
+        const auto to_target = subtract(target_world_, asset_world_);
+        const auto distance = length(to_target);
+        const auto interceptor_max_speed = static_cast<float>(scenario_.interceptor_speed_per_tick);
+        const auto interceptor_accel = std::max(1.0F, interceptor_max_speed * 0.28F);
+        const auto tti_guess = distance / std::max(0.1F, interceptor_max_speed);
+        const auto predicted_intercept = add(target_world_, scale(target_velocity_world_, tti_guess));
+        const auto desired_velocity = scale(normalize(subtract(predicted_intercept, asset_world_)), interceptor_max_speed);
+        const auto velocity_error = subtract(desired_velocity, asset_velocity_world_);
+        const auto accel_step = scale(normalize(velocity_error), std::min(interceptor_accel, length(velocity_error)));
+        asset_velocity_world_ = add(asset_velocity_world_, accel_step);
+        const auto speed = length(asset_velocity_world_);
+        if (speed > interceptor_max_speed) {
+            asset_velocity_world_ = scale(normalize(asset_velocity_world_), interceptor_max_speed);
         }
+        asset_world_ = add(asset_world_, asset_velocity_world_);
+        asset_world_.x = clampf(asset_world_.x, 0.0F, static_cast<float>(scenario_.world_width - 1));
+        asset_world_.y = clampf(asset_world_.y, 0.0F, static_cast<float>(scenario_.world_height - 1));
+        asset_.position.x = static_cast<int>(std::lround(asset_world_.x));
+        asset_.position.y = static_cast<int>(std::lround(asset_world_.y));
+    }
+
+    {
+        const auto los = subtract(target_world_, asset_world_);
+        off_boresight_deg_ = std::abs(normalize_angle_deg(heading_deg(los) - heading_deg(asset_velocity_world_)));
+        seeker_lock_ = length(los) > 0.0F && off_boresight_deg_ <= static_cast<float>(scenario_.seeker_fov_deg);
     }
 
     if (command_status_ == CommandLifecycle::Executing && phase_ == SessionPhase::Engaging) {
-        const auto distance = manhattan_distance(asset_.position, target_.position);
+        const auto distance = length(subtract(target_world_, asset_world_));
         const auto engagement_ticks = engagement_started_tick_.has_value() ? tick_ - *engagement_started_tick_ : 0;
-        if (distance <= scenario_.intercept_radius) {
+        if (distance <= static_cast<float>(scenario_.intercept_radius)) {
             judgment_.ready = true;
             judgment_.code = JudgmentCode::InterceptSuccess;
             judgment_.summary = "authoritative intercept judgment complete";
@@ -541,6 +610,13 @@ void SimulationSession::record_snapshot(float packet_loss_pct) {
     command_console_.last_seen_tick = tick_;
     tactical_viewer_.last_seen_tick = tick_;
     const auto viewer_connection = tactical_viewer_.connection;
+    const auto target_heading = heading_deg(target_velocity_world_);
+    const auto asset_heading = heading_deg(asset_velocity_world_);
+    const auto relative = subtract(target_world_, asset_world_);
+    const auto distance = length(relative);
+    const auto max_speed = std::max(0.1F, static_cast<float>(scenario_.interceptor_speed_per_tick));
+    const auto tti = distance / max_speed;
+    const auto predicted = add(target_world_, scale(target_velocity_world_, tti));
     snapshots_.push_back({
         {session_id_, kServerSenderId, sequence_},
         {tick_, timestamp, sequence_},
@@ -549,11 +625,24 @@ void SimulationSession::record_snapshot(float packet_loss_pct) {
         scenario_.world_height,
         target_,
         asset_,
+        target_world_,
+        asset_world_,
         scenario_.target_velocity_x,
         scenario_.target_velocity_y,
+        target_velocity_world_,
+        asset_velocity_world_,
+        target_heading,
+        asset_heading,
         scenario_.interceptor_speed_per_tick,
+        std::max(1.0F, static_cast<float>(scenario_.interceptor_speed_per_tick) * 0.28F),
         scenario_.intercept_radius,
         scenario_.engagement_timeout_ticks,
+        static_cast<float>(scenario_.seeker_fov_deg),
+        seeker_lock_,
+        off_boresight_deg_,
+        distance > 0.0F,
+        predicted,
+        tti,
         track_,
         asset_status_,
         command_status_,
