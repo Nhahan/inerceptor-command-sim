@@ -2,35 +2,35 @@
   "schema_version": "icss-session-summary-json-v1",
   "session_id": 1001,
   "final_phase": "archived",
-  "snapshot_count": 627,
-  "event_count": 5,
+  "snapshot_count": 528,
+  "event_count": 8,
   "command_console_connection": "connected",
   "viewer_connection": "timed_out",
   "judgment_ready": false,
   "judgment_code": "pending",
   "last_event_type": "session_ended",
-  "resilience_case": "udp_snapshot_gap_convergence",
-  "latest_snapshot_sequence": 627,
+  "resilience_case": "udp_snapshot_gap_convergence,timeout_visibility",
+  "latest_snapshot_sequence": 528,
   "latest_viewer_connection": "timed_out",
   "latest_freshness": "stale",
   "recent_events": [
     {
-      "tick": 87,
+      "tick": 179,
       "event_type": "session_started",
       "summary": "Scenario started"
     },
     {
-      "tick": 140,
+      "tick": 229,
       "event_type": "track_updated",
       "summary": "Track request accepted"
     },
     {
-      "tick": 153,
+      "tick": 262,
       "event_type": "asset_updated",
       "summary": "Interceptor activation accepted"
     },
     {
-      "tick": 622,
+      "tick": 523,
       "event_type": "session_ended",
       "summary": "Session archived"
     }

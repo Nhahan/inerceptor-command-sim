@@ -3,18 +3,18 @@
 - schema_version: icss-sample-output-v1
 - backend: socket_live
 - session_id: 1001
-- cursor_index: 4/5
+- cursor_index: 7/8
 - command_console_connection: connected
 - viewer_connection: timed_out
 - latest_freshness: stale
-- latest_snapshot_sequence: 627
+- latest_snapshot_sequence: 528
 - last_event_type: session_ended
-- resilience_case: udp_snapshot_gap_convergence
+- resilience_case: udp_snapshot_gap_convergence,timeout_visibility
 
 ```text
 === Tactical Viewer ===
 ........................
-........................
+....................T...
 ......A.................
 ........................
 ........................
@@ -25,22 +25,23 @@
 ........................
 ........................
 ........................
-...............T........
+........................
 ........................
 ........................
 ........................
 Entities:
-- target=target-alpha @ (375, 308) active=yes
+- target=target-alpha @ (500, 34) active=yes
 - interceptor=asset-interceptor @ (160, 60) active=yes
 State:
 - phase=archived, tracking=on (confidence=82%), interceptor_status=ready, command_status=none, judgment=pending
+- target_heading_deg=-149.0, interceptor_heading_deg=0.0, tti_s=10.7, predicted_intercept_valid=yes
 Telemetry:
-- connection=timed_out, freshness=stale, snapshot_sequence=627, tick=622, latency_ms=662, packet_loss_pct=0.0, last_snapshot_ms=1776327126400
+- connection=timed_out, freshness=stale, snapshot_sequence=528, tick=523, latency_ms=563, packet_loss_pct=0.0, last_snapshot_ms=1776327107200
 AAR:
-- cursor_index=4/5
+- cursor_index=7/8
 Recent events:
-- [tick 87] Scenario started (session_started)
-- [tick 140] Track request accepted (track_updated)
-- [tick 153] Interceptor activation accepted (asset_updated)
-- [tick 622] Session archived (session_ended)
+- [tick 179] Scenario started (session_started)
+- [tick 229] Track request accepted (track_updated)
+- [tick 262] Interceptor activation accepted (asset_updated)
+- [tick 523] Session archived (session_ended)
 ```
