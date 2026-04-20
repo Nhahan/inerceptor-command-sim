@@ -13,19 +13,19 @@ void SimulationSession::connect_client(ClientRole role, std::uint32_t sender_id)
         push_event(protocol::EventType::ClientReconnected,
                    to_string(role),
                    {},
-                   "Client reconnected",
-                   "Client resumed control-plane visibility and should resync on the next snapshot.");
+                   "Station back on net",
+                   "The station resumed control-plane visibility and should rebuild the tactical picture on the next snapshot.");
         push_event(protocol::EventType::ResilienceTriggered,
                    "simulation_server",
                    {},
-                   "Reconnect/resync path exercised",
-                   "The baseline resilience case uses reconnect + latest-snapshot convergence.");
+                   "Reconnect/reacquire path exercised",
+                   "The baseline resilience case uses reconnect plus latest-snapshot convergence.");
     } else {
         push_event(protocol::EventType::ClientJoined,
                    to_string(role),
                    {},
-                   "Client joined session",
-                   "Client registered before scenario activity.");
+                   "Station on net",
+                   "The station registered before scenario activity.");
     }
 }
 
@@ -35,7 +35,7 @@ void SimulationSession::disconnect_client(ClientRole role, std::string reason) {
     push_event(protocol::EventType::ClientLeft,
                to_string(role),
                {},
-               "Client disconnected",
+               "Station off net",
                std::move(reason));
 }
 

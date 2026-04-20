@@ -251,7 +251,7 @@ int main() {
             icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
         assert(resync_snapshot.display_connection == ConnectionState::Reconnected);
         assert(resync_frame.find("connection=reconnected") != std::string::npos);
-        assert(resync_frame.find("freshness=resync") != std::string::npos);
+        assert(resync_frame.find("picture_status=reacquiring") != std::string::npos);
     }
 
     send_binary_frame(command_client.fd,
@@ -268,7 +268,7 @@ int main() {
             icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
         assert(steady_snapshot.display_connection == ConnectionState::Connected);
         assert(steady_frame.find("connection=connected") != std::string::npos);
-        assert(steady_frame.find("freshness=fresh") != std::string::npos);
+        assert(steady_frame.find("picture_status=current") != std::string::npos);
     }
 
     live->advance_tick();

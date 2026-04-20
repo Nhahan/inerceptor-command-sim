@@ -25,7 +25,7 @@ int main() {
         assert(summary.effective_track_state == expected_track_state);
         assert(summary.intercept_profile == expected_intercept_profile);
         assert(summary.launch_angle_deg == 45U);
-        assert(summary.latest_freshness == "fresh");
+        assert(summary.latest_picture_status == "current");
         assert(!summary.recent_events.empty());
 
         const auto timeline = read_replay_timeline_json(root / "assets/sample-aar/replay-timeline.json");

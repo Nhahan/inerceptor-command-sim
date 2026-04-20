@@ -29,7 +29,7 @@ int main() {
     const auto summary_text = summary_buffer.str();
     assert(summary_text.find("schema_version: icss-session-summary-v1") != std::string::npos);
     assert(summary_text.find("latest_snapshot_sequence:") != std::string::npos);
-    assert(summary_text.find("latest_freshness:") != std::string::npos);
+    assert(summary_text.find("latest_picture_status:") != std::string::npos);
     assert(summary_text.find("fire_control_console_connection:") != std::string::npos);
     assert(summary_text.find("effective_track_state: tracked") != std::string::npos);
     assert(summary_text.find("intercept_profile: tracked_intercept") != std::string::npos);
@@ -43,14 +43,14 @@ int main() {
     const auto output_text = output_buffer.str();
     assert(output_text.find("schema_version: icss-sample-output-v1") != std::string::npos);
     assert(output_text.find("backend: in_process") != std::string::npos);
-    assert(output_text.find("latest_freshness:") != std::string::npos);
+    assert(output_text.find("latest_picture_status:") != std::string::npos);
     assert(output_text.find("latest_snapshot_sequence:") != std::string::npos);
     assert(output_text.find("fire_control_console_connection:") != std::string::npos);
     assert(output_text.find("effective_track_state: tracked") != std::string::npos);
     assert(output_text.find("intercept_profile: tracked_intercept") != std::string::npos);
     assert(output_text.find("launch_angle_deg: 45") != std::string::npos);
     assert(output_text.find("last_event_type:") != std::string::npos);
-    assert(output_text.find("freshness=") != std::string::npos);
+    assert(output_text.find("picture_status=") != std::string::npos);
 
     std::ifstream timeline_in(temp_root / "assets/sample-aar/replay-timeline.json");
     std::stringstream timeline_buffer;
@@ -106,7 +106,7 @@ int main() {
     assert(icss::testsupport::minijson::require_field(summary_json_object, "resilience_case").is_string());
     assert(icss::testsupport::minijson::require_field(summary_json_object, "latest_snapshot_sequence").is_int());
     assert(icss::testsupport::minijson::require_field(summary_json_object, "latest_display_connection").is_string());
-    assert(icss::testsupport::minijson::require_field(summary_json_object, "latest_freshness").is_string());
+    assert(icss::testsupport::minijson::require_field(summary_json_object, "latest_picture_status").is_string());
     const auto& recent = icss::testsupport::minijson::require_field(summary_json_object, "recent_events");
     assert(recent.is_array());
     assert(!recent.as_array().empty());

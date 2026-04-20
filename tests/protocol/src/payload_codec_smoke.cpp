@@ -71,17 +71,17 @@ int main() {
         "reconnected",
         3U,
         "assessment_produced",
-        "Assessment produced",
+        "Engagement assessed",
     };
     const auto telemetry_wire = serialize(telemetry);
     const auto parsed_telemetry = parse_telemetry(telemetry_wire);
     assert(parsed_telemetry.sample.tick == 3U);
-    assert(parsed_telemetry.sample.latency_ms == 35U);
+    assert(parsed_telemetry.sample.tick_interval_ms == 35U);
     assert(parsed_telemetry.sample.packet_loss_pct > 12.0F);
     assert(parsed_telemetry.connection_state == "reconnected");
     assert(parsed_telemetry.event_tick == 3U);
     assert(parsed_telemetry.event_type == "assessment_produced");
-    assert(parsed_telemetry.event_summary == "Assessment produced");
+    assert(parsed_telemetry.event_summary == "Engagement assessed");
 
     const SnapshotPayload snapshot {
         {1001U, 1U, 9U},

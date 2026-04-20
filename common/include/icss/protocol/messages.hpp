@@ -64,7 +64,7 @@ struct SnapshotHeader {
 
 struct TelemetrySample {
     std::uint64_t tick {};
-    std::uint32_t latency_ms {};
+    std::uint32_t tick_interval_ms {};
     float packet_loss_pct {};
     std::uint64_t last_snapshot_timestamp_ms {};
 };

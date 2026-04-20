@@ -29,7 +29,7 @@ int main() {
         events,
         icss::view::make_replay_cursor(events.size(), events.empty() ? 0 : events.size() - 1));
     assert(frame.find("connection=timed_out") != std::string::npos);
-    assert(frame.find("freshness=stale") != std::string::npos);
+    assert(frame.find("picture_status=stale") != std::string::npos);
 
     SimulationSession reset_session;
     reset_session.connect_client(ClientRole::FireControlConsole, 101U);

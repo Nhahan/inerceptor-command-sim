@@ -36,12 +36,12 @@ std::string freshness_label_impl(const icss::core::Snapshot& snapshot) {
     case icss::core::ConnectionState::Disconnected:
         return "stale";
     case icss::core::ConnectionState::Reconnected:
-        return "resync";
+        return "reacquiring";
     case icss::core::ConnectionState::Connected:
         if (snapshot.telemetry.packet_loss_pct > 0.0F) {
             return "degraded";
         }
-        return "fresh";
+        return "current";
     }
     return "unknown";
 }
@@ -110,15 +110,15 @@ std::string render_tactical_frame(const icss::core::Snapshot& snapshot,
         << ", intercept_profile=" << (track_active ? "tracked_intercept" : "unguided_intercept")
         << ", tti_s=" << snapshot.time_to_intercept_s
         << ", predicted_intercept_valid=" << (snapshot.predicted_intercept_valid ? "yes" : "no") << '\n';
-    out << "Telemetry:\n";
+    out << "Link / Picture Status:\n";
     out << "- connection=" << icss::core::to_string(snapshot.display_connection)
-        << ", freshness=" << freshness_label_impl(snapshot)
+        << ", picture_status=" << freshness_label_impl(snapshot)
         << ", snapshot_sequence=" << snapshot.header.snapshot_sequence
         << ", tick=" << snapshot.telemetry.tick
-        << ", latency_ms=" << snapshot.telemetry.latency_ms
+        << ", tick_interval_ms=" << snapshot.telemetry.tick_interval_ms
         << ", packet_loss_pct=" << std::fixed << std::setprecision(1) << snapshot.telemetry.packet_loss_pct
         << ", last_snapshot_ms=" << snapshot.telemetry.last_snapshot_timestamp_ms << '\n';
-    out << "AAR:\n";
+    out << "Post-Engagement Review:\n";
     out << "- cursor_index=" << cursor.index << "/" << cursor.total << "\n";
     out << "Recent events:\n";
     if (recent_events.empty()) {

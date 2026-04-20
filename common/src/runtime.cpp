@@ -23,6 +23,8 @@ bool event_track_active(const icss::core::EventRecord& event) {
     }
     return event.summary.find("acquired") != std::string::npos
         || event.details.find("acquired") != std::string::npos
+        || event.summary.find("established") != std::string::npos
+        || event.details.find("established") != std::string::npos
         || event.summary.find("enabled") != std::string::npos
         || event.details.find("enabled") != std::string::npos
         || event.summary.find("tracked_intercept") != std::string::npos

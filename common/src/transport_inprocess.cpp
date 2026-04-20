@@ -138,7 +138,7 @@ public:
         out << "- effective_track_state: " << (track_active ? "tracked" : "untracked") << "\n";
         out << "- intercept_profile: " << (track_active ? "tracked_intercept" : "unguided_intercept") << "\n";
         out << "- launch_angle_deg: " << static_cast<int>(snapshot.launch_angle_deg) << "\n";
-        out << "- latest_freshness: " << icss::view::freshness_label(snapshot) << "\n";
+        out << "- latest_picture_status: " << icss::view::freshness_label(snapshot) << "\n";
         out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
         out << "- last_event_type: " << (summary.has_last_event ? icss::protocol::to_string(summary.last_event_type) : "none") << "\n";
         out << "- resilience_case: " << summary.resilience_case << "\n\n";

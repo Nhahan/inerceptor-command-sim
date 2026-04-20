@@ -6,6 +6,13 @@
 #include "simulation_internal.hpp"
 
 namespace icss::core {
+namespace {
+
+std::uint32_t tick_interval_ms_for_rate(int tick_rate_hz) {
+    return static_cast<std::uint32_t>(std::max(1, 1000 / std::max(1, tick_rate_hz)));
+}
+
+}  // namespace
 
 void SimulationSession::record_snapshot(float packet_loss_pct) {
     ++sequence_;
@@ -64,7 +71,7 @@ void SimulationSession::record_snapshot(float packet_loss_pct) {
         engage_order_status_,
         assessment_,
         display_connection,
-        {tick_, static_cast<std::uint32_t>((telemetry_interval_ms_ / 10) + tick_rate_hz_ + static_cast<int>(tick_)), packet_loss_pct, timestamp},
+        {tick_, tick_interval_ms_for_rate(tick_rate_hz_), packet_loss_pct, timestamp},
         static_cast<float>(scenario_.launch_angle_deg),
     });
     if (display_connection == ConnectionState::Reconnected) {

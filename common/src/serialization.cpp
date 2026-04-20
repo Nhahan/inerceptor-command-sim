@@ -200,9 +200,15 @@ SnapshotHeader parse_snapshot_header(const FieldMap& fields) {
 }
 
 TelemetrySample parse_telemetry_sample(const FieldMap& fields) {
+    std::string tick_interval_text;
+    if (const auto it = fields.find("tick_interval_ms"); it != fields.end()) {
+        tick_interval_text = it->second;
+    } else {
+        tick_interval_text = require(fields, "latency_ms");
+    }
     return {
         parse_u64(require(fields, "tick")),
-        parse_u32(require(fields, "latency_ms")),
+        parse_u32(tick_interval_text),
         parse_float(require(fields, "packet_loss_pct")),
         parse_u64(require(fields, "last_snapshot_timestamp_ms")),
     };
@@ -468,7 +474,7 @@ std::string serialize(const TelemetryPayload& payload) {
         {"sender_id", as_string(payload.envelope.sender_id)},
         {"sequence", as_string(payload.envelope.sequence)},
         {"tick", as_string(payload.sample.tick)},
-        {"latency_ms", as_string(payload.sample.latency_ms)},
+        {"tick_interval_ms", as_string(payload.sample.tick_interval_ms)},
         {"packet_loss_pct", as_string(payload.sample.packet_loss_pct)},
         {"last_snapshot_timestamp_ms", as_string(payload.sample.last_snapshot_timestamp_ms)},
         {"connection_state", payload.connection_state},

@@ -127,7 +127,7 @@ void print_tracked_intercept_block(const Summary& summary, const Timeline& timel
     std::cout << "tracked_intercept.summary.session_id=" << summary.session_id << '\n';
     std::cout << "tracked_intercept.summary.assessment_code=" << summary.assessment_code << '\n';
     std::cout << "tracked_intercept.summary.resilience_case=" << summary.resilience_case << '\n';
-    std::cout << "tracked_intercept.summary.latest_freshness=" << summary.latest_freshness << '\n';
+    std::cout << "tracked_intercept.summary.latest_picture_status=" << summary.latest_picture_status << '\n';
     std::cout << "tracked_intercept.timeline.event_count=" << timeline.event_count << '\n';
     std::cout << "tracked_intercept.timeline.last_event_type=" << (timeline.events.empty() ? "none" : timeline.events.back().event_type) << '\n';
     std::cout << "tracked_intercept.log.backend=" << runtime_log.backend << '\n';
@@ -143,7 +143,7 @@ void print_unguided_intercept_compare_block(const Summary& tracked_intercept_sum
     std::cout << "unguided_intercept.summary.session_id=" << unguided_intercept_summary.session_id << '\n';
     std::cout << "unguided_intercept.summary.assessment_code=" << unguided_intercept_summary.assessment_code << '\n';
     std::cout << "unguided_intercept.summary.resilience_case=" << unguided_intercept_summary.resilience_case << '\n';
-    std::cout << "unguided_intercept.summary.latest_freshness=" << unguided_intercept_summary.latest_freshness << '\n';
+    std::cout << "unguided_intercept.summary.latest_picture_status=" << unguided_intercept_summary.latest_picture_status << '\n';
     std::cout << "unguided_intercept.timeline.event_count=" << unguided_intercept_timeline.event_count << '\n';
     std::cout << "unguided_intercept.timeline.last_event_type=" << (unguided_intercept_timeline.events.empty() ? "none" : unguided_intercept_timeline.events.back().event_type) << '\n';
     std::cout << "compare.tracked_intercept_judgment=" << tracked_intercept_summary.assessment_code << '\n';

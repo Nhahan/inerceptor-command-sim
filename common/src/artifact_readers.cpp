@@ -57,7 +57,11 @@ SessionSummaryArtifact read_session_summary_json(const std::filesystem::path& pa
     artifact.resilience_case = icss::testsupport::minijson::require_field(object, "resilience_case").as_string();
     artifact.latest_snapshot_sequence = to_u64(icss::testsupport::minijson::require_field(object, "latest_snapshot_sequence"));
     artifact.latest_display_connection = icss::testsupport::minijson::require_field(object, "latest_display_connection").as_string();
-    artifact.latest_freshness = icss::testsupport::minijson::require_field(object, "latest_freshness").as_string();
+    if (const auto picture_status = object.find("latest_picture_status"); picture_status != object.end()) {
+        artifact.latest_picture_status = picture_status->second.as_string();
+    } else {
+        artifact.latest_picture_status = icss::testsupport::minijson::require_field(object, "latest_freshness").as_string();
+    }
 
     const auto& recent = icss::testsupport::minijson::require_field(object, "recent_events").as_array();
     for (const auto& entry : recent) {

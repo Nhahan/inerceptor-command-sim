@@ -30,7 +30,7 @@ struct SessionSummaryArtifact {
     std::string resilience_case;
     std::uint64_t latest_snapshot_sequence {};
     std::string latest_display_connection;
-    std::string latest_freshness;
+    std::string latest_picture_status;
     std::vector<ArtifactRecentEvent> recent_events;
 };
 

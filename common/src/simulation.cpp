@@ -93,8 +93,8 @@ void SimulationSession::advance_tick() {
             push_event(protocol::EventType::AssessmentProduced,
                        "simulation_server",
                        {asset_.id, target_.id},
-                       "Assessment produced",
-                       "Server-authoritative assessment marked the intercept attempt as successful and the target as intercepted.");
+                       "Engagement assessed",
+                       "The authoritative assessment marked the intercept attempt as successful and the target as intercepted.");
         } else if (engagement_ticks >= static_cast<std::uint64_t>(scenario_.engagement_timeout_ticks)) {
             assessment_.ready = true;
             assessment_.code = AssessmentCode::TimeoutObserved;
@@ -106,8 +106,8 @@ void SimulationSession::advance_tick() {
             push_event(protocol::EventType::AssessmentProduced,
                        "simulation_server",
                        {asset_.id, target_.id},
-                       "Assessment produced",
-                       "Server-authoritative assessment marked the intercept attempt as timed out before intercept.");
+                       "Engagement assessed",
+                       "The authoritative assessment marked the intercept attempt as timed out before intercept.");
         }
     }
 

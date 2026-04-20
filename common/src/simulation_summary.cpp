@@ -26,6 +26,8 @@ bool event_track_active(const EventRecord& event) {
     }
     return event.summary.find("acquired") != std::string::npos
         || event.details.find("acquired") != std::string::npos
+        || event.summary.find("established") != std::string::npos
+        || event.details.find("established") != std::string::npos
         || event.summary.find("enabled") != std::string::npos
         || event.details.find("enabled") != std::string::npos
         || event.summary.find("tracked_intercept") != std::string::npos
@@ -131,7 +133,7 @@ void SimulationSession::write_aar_artifacts(const std::filesystem::path& output_
     summary_json << "  \"resilience_case\": \"" << detail::escape_json(summary.resilience_case) << "\",\n";
     summary_json << "  \"latest_snapshot_sequence\": " << snapshot.header.snapshot_sequence << ",\n";
     summary_json << "  \"latest_display_connection\": \"" << to_string(snapshot.display_connection) << "\",\n";
-    summary_json << "  \"latest_freshness\": \"" << view::freshness_label(snapshot) << "\",\n";
+    summary_json << "  \"latest_picture_status\": \"" << view::freshness_label(snapshot) << "\",\n";
     summary_json << "  \"recent_events\": [\n";
     for (std::size_t index = 0; index < recent_events.size(); ++index) {
         const auto& event = recent_events[index];
@@ -145,7 +147,7 @@ void SimulationSession::write_aar_artifacts(const std::filesystem::path& output_
     summary_json << "}\n";
 
     std::ofstream summary_file(output_dir / "session-summary.md");
-    summary_file << "# Sample AAR Session Summary\n\n";
+    summary_file << "# Sample Post-Engagement Review Summary\n\n";
     summary_file << "## Summary\n\n";
     summary_file << "- schema_version: " << kSessionSummarySchemaVersion << "\n";
     summary_file << "- session_id: " << summary.session_id << "\n";
@@ -163,7 +165,7 @@ void SimulationSession::write_aar_artifacts(const std::filesystem::path& output_
     summary_file << "- resilience_case: " << summary.resilience_case << "\n";
     summary_file << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
     summary_file << "- latest_display_connection: " << to_string(snapshot.display_connection) << "\n";
-    summary_file << "- latest_freshness: " << view::freshness_label(snapshot) << "\n";
+    summary_file << "- latest_picture_status: " << view::freshness_label(snapshot) << "\n";
     summary_file << "\n## Recent Events\n\n";
     for (const auto& event : recent_events) {
         summary_file << "- [tick " << event.header.tick << "] "
@@ -192,7 +194,7 @@ void SimulationSession::write_example_output(const std::filesystem::path& output
     out << "- effective_track_state: " << effective_track_state_label(track_active) << "\n";
     out << "- intercept_profile: " << intercept_profile_label(track_active) << "\n";
     out << "- launch_angle_deg: " << static_cast<int>(snapshot.launch_angle_deg) << "\n";
-    out << "- latest_freshness: " << view::freshness_label(snapshot) << "\n";
+    out << "- latest_picture_status: " << view::freshness_label(snapshot) << "\n";
     out << "- latest_snapshot_sequence: " << snapshot.header.snapshot_sequence << "\n";
     out << "- last_event_type: " << (summary.has_last_event ? protocol::to_string(summary.last_event_type) : "none") << "\n";
     out << "- resilience_case: " << summary.resilience_case << "\n\n";

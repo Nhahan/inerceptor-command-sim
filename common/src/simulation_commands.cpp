@@ -22,8 +22,8 @@ CommandResult SimulationSession::start_scenario() {
     push_event(protocol::EventType::SessionStarted,
                "simulation_server",
                {target_.id},
-               "Scenario started",
-               "The authoritative loop is now in detecting state.");
+               "Engagement initiated",
+               "The authoritative loop is now in the detection state.");
     record_snapshot();
     return {true, "scenario started", protocol::TcpMessageKind::ScenarioStart};
 }
@@ -69,8 +69,8 @@ CommandResult SimulationSession::request_track() {
         push_event(protocol::EventType::TrackUpdated,
                    "fire_control_console",
                    {target_.id},
-                   "Track acquired",
-                   "A target track is now established for pre-launch fire control.");
+                   "Track file established",
+                   "A target track file is now available for pre-launch fire control.");
         record_snapshot();
         return {true, "track accepted", protocol::TcpMessageKind::TrackAcquire};
     }
@@ -84,8 +84,8 @@ CommandResult SimulationSession::request_track() {
         push_event(protocol::EventType::TrackUpdated,
                    "fire_control_console",
                    {target_.id, asset_.id},
-                   "Track acquired",
-                   "Track was re-established while the interceptor remained ready.");
+                   "Track file established",
+                   "The track file was re-established while the interceptor remained ready.");
         record_snapshot();
         return {true, "track accepted", protocol::TcpMessageKind::TrackAcquire};
     }
@@ -116,8 +116,8 @@ CommandResult SimulationSession::release_track() {
         push_event(protocol::EventType::TrackUpdated,
                    "fire_control_console",
                    {target_.id},
-                   "Track dropped",
-                   "Unguided intercept will be used unless track is reacquired before engage order. Session returned to detecting.");
+                   "Track file dropped",
+                   "Unguided intercept will be used unless the track file is re-established before the fire order. Session returned to detection.");
         record_snapshot();
         return {true, "track released", protocol::TcpMessageKind::TrackDrop};
     }
@@ -131,8 +131,8 @@ CommandResult SimulationSession::release_track() {
         push_event(protocol::EventType::TrackUpdated,
                    "fire_control_console",
                    {target_.id, asset_.id},
-                   "Track dropped",
-                   "Unguided intercept will be used unless track is reacquired before engage order. The interceptor remains ready.");
+                   "Track file dropped",
+                   "Unguided intercept will be used unless the track file is re-established before the fire order. The interceptor remains ready.");
         record_snapshot();
         return {true, "track released", protocol::TcpMessageKind::TrackDrop};
     }
@@ -168,8 +168,8 @@ CommandResult SimulationSession::activate_asset() {
     push_event(protocol::EventType::InterceptorUpdated,
                "fire_control_console",
                {asset_.id},
-               "Interceptor readied",
-               "Interceptor is readied for an engage order.");
+               "Weapon ready",
+               "The interceptor is armed and ready for a fire order.");
     record_snapshot();
     return {true, "interceptor ready", protocol::TcpMessageKind::InterceptorReady};
 }
@@ -198,8 +198,8 @@ CommandResult SimulationSession::issue_command() {
     push_event(protocol::EventType::EngageOrderAccepted,
                "fire_control_console",
                {asset_.id, target_.id},
-               "Launch accepted",
-               "Authoritative server accepted the operator command and launched the interceptor on a "
+               "Fire order executed",
+               "The authoritative server executed the fire order and launched the interceptor on a "
                    + std::string(tracked_intercept_launch ? "tracked_intercept" : "unguided_intercept")
                    + " path at " + std::to_string(scenario_.launch_angle_deg) + " deg.");
     record_snapshot();
@@ -225,8 +225,8 @@ void SimulationSession::archive_session() {
     push_event(protocol::EventType::SessionEnded,
                "simulation_server",
                {target_.id, asset_.id},
-               "Session archived",
-               "Scenario completed and artifacts are ready for AAR.");
+               "Run archived",
+               "The engagement run completed and artifacts are ready for post-engagement review.");
     record_snapshot();
 }
 

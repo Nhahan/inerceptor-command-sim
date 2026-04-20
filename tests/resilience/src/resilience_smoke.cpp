@@ -12,10 +12,10 @@ int main() {
     const auto& events = session.events();
 
     const auto reconnected = std::any_of(events.begin(), events.end(), [](const EventRecord& event) {
-        return event.summary == "Client reconnected";
+        return event.summary == "Station back on net";
     });
     const auto resilience = std::any_of(events.begin(), events.end(), [](const EventRecord& event) {
-        return event.summary == "Reconnect/resync path exercised" || event.summary == "Snapshot gap exercised";
+        return event.summary == "Reconnect/reacquire path exercised" || event.summary == "Snapshot gap exercised";
     });
 
     assert(reconnected);
@@ -26,10 +26,10 @@ int main() {
         events,
         icss::view::make_replay_cursor(events.size(), events.empty() ? 0 : events.size() - 1));
     assert(frame.find("packet_loss_pct=") != std::string::npos);
-    assert(frame.find("AAR:") != std::string::npos);
+    assert(frame.find("Post-Engagement Review:") != std::string::npos);
     assert(frame.find("cursor_index=") != std::string::npos);
     assert(frame.find("Entities:") != std::string::npos);
-    assert(frame.find("freshness=") != std::string::npos);
+    assert(frame.find("picture_status=") != std::string::npos);
 
     SimulationSession degraded_session;
     degraded_session.connect_client(ClientRole::FireControlConsole, 101U);
@@ -46,7 +46,7 @@ int main() {
         icss::view::make_replay_cursor(degraded_session.events().size(),
                                        degraded_session.events().empty() ? 0 : degraded_session.events().size() - 1));
     assert(degraded_frame.find("packet_loss_pct=25.0") != std::string::npos);
-    assert(degraded_frame.find("freshness=degraded") != std::string::npos);
+    assert(degraded_frame.find("picture_status=degraded") != std::string::npos);
 
     SimulationSession reconnect_session;
     reconnect_session.connect_client(ClientRole::FireControlConsole, 101U);
@@ -61,6 +61,6 @@ int main() {
         icss::view::make_replay_cursor(reconnect_session.events().size(),
                                        reconnect_session.events().empty() ? 0 : reconnect_session.events().size() - 1));
     assert(reconnect_frame.find("connection=reconnected") != std::string::npos);
-    assert(reconnect_frame.find("freshness=resync") != std::string::npos);
+    assert(reconnect_frame.find("picture_status=reacquiring") != std::string::npos);
     return 0;
 }

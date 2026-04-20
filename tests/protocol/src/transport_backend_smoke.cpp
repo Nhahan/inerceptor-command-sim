@@ -290,7 +290,7 @@ int main() {
             degraded_snapshot,
             live->events(),
             icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
-        assert(degraded_frame.find("freshness=degraded") != std::string::npos);
+        assert(degraded_frame.find("picture_status=degraded") != std::string::npos);
         assert(degraded_frame.find("packet_loss_pct=25.0") != std::string::npos);
     }
     live->advance_tick();

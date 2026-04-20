@@ -160,7 +160,7 @@ int main() {
         live->events(),
         icss::view::make_replay_cursor(live->events().size(), live->events().empty() ? 0 : live->events().size() - 1));
     assert(frame.find("connection=timed_out") != std::string::npos);
-    assert(frame.find("freshness=stale") != std::string::npos);
+    assert(frame.find("picture_status=stale") != std::string::npos);
     assert(frame.find("snapshot_sequence=") != std::string::npos);
     const auto summary = live->summary();
     assert(summary.resilience_case.find("timeout_visibility") != std::string::npos);
