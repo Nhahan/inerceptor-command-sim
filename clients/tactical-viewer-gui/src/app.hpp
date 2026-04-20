@@ -66,6 +66,12 @@ struct AarState {
     std::string event_summary {"aar not requested"};
 };
 
+struct PendingHeartbeatSample {
+    std::uint64_t heartbeat_id {0};
+    std::uint64_t sent_monotonic_ms {0};
+    std::uint64_t sent_wall_time_ms {0};
+};
+
 struct ViewerState {
     icss::core::Snapshot snapshot {};
     icss::core::ScenarioConfig planned_scenario {};
@@ -77,14 +83,20 @@ struct ViewerState {
     std::uint64_t snapshot_count_received {0};
     std::uint64_t telemetry_count_received {0};
     std::uint64_t now_ms {0};
+    std::uint64_t now_wall_time_ms {0};
     std::uint64_t last_datagram_received_ms {0};
     std::uint64_t last_join_attempt_ms {0};
     std::uint64_t last_server_event_tick {0};
+    std::uint64_t last_snapshot_wall_time_ms {0};
+    std::uint64_t link_delay_raw_ms {0};
+    std::uint64_t link_delay_ms {0};
+    bool has_link_delay_sample {false};
     std::size_t timeline_scroll_lines {0};
     std::string last_server_event_type {"none"};
     std::string last_server_event_summary {"no server event"};
     std::deque<icss::core::Vec2f> target_history;
     std::deque<icss::core::Vec2f> interceptor_history;
+    std::deque<PendingHeartbeatSample> pending_heartbeats;
     bool effective_track_active {false};
     ControlState control;
     AarState aar;
@@ -108,9 +120,18 @@ struct Button {
     SDL_Rect rect {};
 };
 
+enum class LayoutMode {
+    StandbySetup,
+    LiveTactical,
+    ReviewTactical,
+};
+
 struct GuiLayout {
+    LayoutMode mode {LayoutMode::StandbySetup};
     SDL_Rect header_panel {};
     SDL_Rect phase_strip {};
+    SDL_Rect content_panel {};
+    SDL_Rect rail_panel {};
     SDL_Rect map_rect {};
     SDL_Rect entity_panel {};
     int panel_x {0};
@@ -120,6 +141,8 @@ struct GuiLayout {
     SDL_Rect control_panel {};
     SDL_Rect setup_panel {};
     SDL_Rect event_panel {};
+    bool show_resilience_panel {false};
+    bool show_setup_panel {false};
     std::vector<Button> buttons;
 };
 
@@ -145,6 +168,8 @@ std::string aar_panel_text(const ViewerState& state);
 std::string control_display_label(std::string_view action, const ViewerState& state);
 bool control_button_enabled(std::string_view action, const ViewerState& state);
 std::string control_panel_hint(const ViewerState& state);
+LayoutMode layout_mode_for_state(const ViewerState& state);
+std::string layout_mode_name(LayoutMode mode);
 std::string terminal_timeline_text(const ViewerState& state, bool aar_mode);
 std::vector<std::string> terminal_timeline_lines(const ViewerState& state, bool aar_mode);
 std::string control_timeline_message(std::string_view label, bool ok, std::string_view message);
@@ -218,10 +243,11 @@ void draw_text(SDL_Renderer* renderer,
                SDL_Color color,
                const std::string& text,
                int wrap_width = 0);
-GuiLayout build_layout(const ViewerOptions& options);
+GuiLayout build_layout(const ViewerOptions& options, const ViewerState& state);
 void render_gui(SDL_Renderer* renderer,
                 TTF_Font* title_font,
                 TTF_Font* body_font,
+                TTF_Font* compact_font,
                 const ViewerState& state,
                 const ViewerOptions& options);
 void write_dump_frame(SDL_Renderer* renderer, const std::filesystem::path& path);

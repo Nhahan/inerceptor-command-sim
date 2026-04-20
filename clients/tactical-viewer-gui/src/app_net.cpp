@@ -1,5 +1,7 @@
 #include "app.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -48,6 +50,47 @@ void send_datagram(int fd, const sockaddr_in& target, std::string_view payload) 
     if (sent < 0) {
         throw std::runtime_error("failed to send udp datagram");
     }
+}
+
+std::uint64_t wall_time_ms_now() {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count());
+}
+
+void prune_pending_heartbeats(ViewerState& state) {
+    constexpr std::size_t kMaxPendingHeartbeats = 32;
+    while (state.pending_heartbeats.size() > kMaxPendingHeartbeats) {
+        state.pending_heartbeats.pop_front();
+    }
+}
+
+void update_link_delay(ViewerState& state,
+                       const icss::protocol::DisplayHeartbeatAckPayload& ack,
+                       std::uint64_t now_monotonic_ms) {
+    const auto match = std::find_if(
+        state.pending_heartbeats.begin(),
+        state.pending_heartbeats.end(),
+        [&](const PendingHeartbeatSample& sample) { return sample.heartbeat_id == ack.heartbeat_id; });
+    if (match == state.pending_heartbeats.end()) {
+        return;
+    }
+    if (now_monotonic_ms < match->sent_monotonic_ms) {
+        state.pending_heartbeats.erase(match);
+        return;
+    }
+    const auto raw_rtt_ms = now_monotonic_ms - match->sent_monotonic_ms;
+    state.link_delay_raw_ms = raw_rtt_ms;
+    if (!state.has_link_delay_sample) {
+        state.link_delay_ms = raw_rtt_ms;
+        state.has_link_delay_sample = true;
+    } else {
+        const double smoothed = (0.8 * static_cast<double>(state.link_delay_ms))
+            + (0.2 * static_cast<double>(raw_rtt_ms));
+        state.link_delay_ms = static_cast<std::uint64_t>(smoothed + 0.5);
+    }
+    state.pending_heartbeats.erase(state.pending_heartbeats.begin(), std::next(match));
 }
 
 }  // namespace
@@ -137,7 +180,15 @@ void send_viewer_join(UdpSocket& socket, const ViewerOptions& options, std::uint
 }
 
 void send_display_heartbeat(UdpSocket& socket, const ViewerOptions& options, std::uint64_t& sequence, ViewerState& state) {
-    const icss::protocol::DisplayHeartbeatPayload heartbeat {{options.session_id, options.sender_id, sequence++}, ++state.heartbeat_id};
+    const auto client_send_wall_time_ms = state.now_wall_time_ms == 0 ? wall_time_ms_now() : state.now_wall_time_ms;
+    const auto heartbeat_id = ++state.heartbeat_id;
+    state.pending_heartbeats.push_back({heartbeat_id, state.now_ms, client_send_wall_time_ms});
+    prune_pending_heartbeats(state);
+    const icss::protocol::DisplayHeartbeatPayload heartbeat {
+        {options.session_id, options.sender_id, sequence++},
+        heartbeat_id,
+        client_send_wall_time_ms,
+    };
     send_datagram(socket.get(), make_server_addr(options), icss::protocol::serialize(heartbeat));
     ++state.heartbeat_count;
 }
@@ -165,8 +216,10 @@ void receive_datagrams(UdpSocket& socket, const ViewerOptions& options, ViewerSt
         const std::string wire(buffer, buffer + received);
         if (wire.rfind("kind=world_snapshot", 0) == 0) {
             try {
-                apply_snapshot(state, icss::protocol::parse_snapshot(wire));
+                const auto payload = icss::protocol::parse_snapshot(wire);
+                apply_snapshot(state, payload);
                 state.last_datagram_received_ms = now_ms;
+                state.last_snapshot_wall_time_ms = payload.header.capture_wall_time_ms;
             } catch (const std::exception&) {
                 continue;
             }
@@ -174,8 +227,18 @@ void receive_datagrams(UdpSocket& socket, const ViewerOptions& options, ViewerSt
         }
         if (wire.rfind("kind=telemetry", 0) == 0) {
             try {
-                apply_telemetry(state, icss::protocol::parse_telemetry(wire));
+                const auto payload = icss::protocol::parse_telemetry(wire);
+                apply_telemetry(state, payload);
                 state.last_datagram_received_ms = now_ms;
+                state.last_snapshot_wall_time_ms = payload.sample.last_snapshot_wall_time_ms;
+            } catch (const std::exception&) {
+                continue;
+            }
+            continue;
+        }
+        if (wire.rfind("kind=display_heartbeat_ack", 0) == 0) {
+            try {
+                update_link_delay(state, icss::protocol::parse_display_heartbeat_ack(wire), now_ms);
             } catch (const std::exception&) {
                 continue;
             }

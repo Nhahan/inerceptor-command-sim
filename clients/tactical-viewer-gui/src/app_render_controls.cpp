@@ -5,6 +5,13 @@
 namespace icss::viewer_gui {
 namespace {
 
+void fill_section_panel(SDL_Renderer* renderer, const SDL_Rect& rect) {
+    SDL_SetRenderDrawColor(renderer, 14, 18, 26, 228);
+    SDL_RenderFillRect(renderer, &rect);
+    SDL_SetRenderDrawColor(renderer, 56, 66, 86, 200);
+    SDL_RenderDrawLine(renderer, rect.x, rect.y, rect.x + rect.w, rect.y);
+}
+
 void draw_button(SDL_Renderer* renderer,
                  const RenderContext& ctx,
                  const Button& button,
@@ -63,37 +70,30 @@ void draw_button(SDL_Renderer* renderer,
 
 void render_control_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
     const auto& panel = ctx.layout.control_panel;
-    fill_panel(renderer, panel, rgba(12, 14, 20), rgba(54, 60, 78));
+    fill_section_panel(renderer, panel);
     draw_text(renderer, ctx.title_font, panel.x + 12, panel.y + 10, rgba(141, 211, 199), "Fire Control");
-    const SDL_Rect next_hint_box {panel.x + 12, panel.y + 40, panel.w - 24, 24};
-    fill_panel(renderer, next_hint_box, rgba(22, 27, 36), rgba(56, 66, 86));
-    const auto recommended_label = ctx.recommended_control.empty()
-        ? std::string("wait")
-        : control_display_label(ctx.recommended_control, ctx.state);
-    draw_text(renderer,
-              ctx.body_font,
-              next_hint_box.x + 10,
-              next_hint_box.y + 4,
-              rgba(148, 156, 172),
-              "Next Control: " + recommended_label,
-              next_hint_box.w - 20);
-    const SDL_Rect status_box {panel.x + 12, panel.y + 70, panel.w - 24, 42};
+    const SDL_Rect status_box {panel.x + 12, panel.y + 40, panel.w - 24, 30};
     fill_panel(renderer, status_box, rgba(18, 23, 32), rgba(56, 66, 86));
+    const auto control_mode = ctx.layout.mode == LayoutMode::ReviewTactical
+        ? (ctx.state.aar.loaded ? std::string("Review loaded.") : std::string("Review available."))
+        : ("Mode  " + std::string(ctx.state.effective_track_active ? "tracked" : "unguided")
+            + "  |  Track  " + std::string(ctx.state.snapshot.track.active ? "live" : "dropped"));
     draw_text(renderer,
-              ctx.body_font,
+              ctx.compact_font,
               status_box.x + 10,
-              status_box.y + 6,
+              status_box.y + 5,
               rgba(188, 198, 214),
-              "Mode  " + std::string(ctx.state.effective_track_active ? "tracked" : "unguided")
-                  + "  |  Track  " + std::string(ctx.state.snapshot.track.active ? "live" : "dropped"),
+              control_mode,
               status_box.w - 20);
+    const SDL_Rect hint_box {panel.x + 12, panel.y + 74, panel.w - 24, 24};
+    fill_panel(renderer, hint_box, rgba(16, 21, 30), rgba(56, 66, 86));
     draw_text(renderer,
-              ctx.body_font,
-              status_box.x + 10,
-              status_box.y + 20,
+              ctx.compact_font,
+              hint_box.x + 10,
+              hint_box.y + 4,
               rgba(148, 156, 172),
               control_panel_hint(ctx.state),
-              status_box.w - 20);
+              hint_box.w - 20);
 
     for (const auto& button : ctx.layout.buttons) {
         if (is_live_control_action(button.action)) {
@@ -104,10 +104,10 @@ void render_control_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
 
 void render_setup_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
     const auto& panel = ctx.layout.setup_panel;
-    fill_panel(renderer, panel, rgba(12, 14, 20), rgba(54, 60, 78));
-    draw_text(renderer, ctx.title_font, panel.x + 12, panel.y + 10, rgba(141, 211, 199), "Scenario Setup");
+    fill_section_panel(renderer, panel);
+    draw_text(renderer, ctx.title_font, panel.x + 12, panel.y + 10, rgba(141, 211, 199), "Next Start Setup");
     draw_text(renderer,
-              ctx.body_font,
+              ctx.compact_font,
               panel.x + 12,
               panel.y + 38,
               rgba(148, 156, 172),
@@ -120,17 +120,18 @@ void render_setup_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
     for (const auto& box : {target_pos_box, target_vel_box, launch_box, asset_dyn_box}) {
         fill_panel(renderer, box, rgba(22, 27, 36), rgba(56, 66, 86));
     }
-    const int label_x = panel.x + 18;
-    const int value_x = panel.x + 112;
-    const int button_gutter_x = panel.x + panel.w - 12 - ((32 * 4) + (4 * 3));
+    const int button_w = 28;
+    const int label_x = panel.x + 16;
+    const int value_x = panel.x + 86;
+    const int button_gutter_x = panel.x + panel.w - 12 - ((button_w * 4) + (4 * 3));
     SDL_SetRenderDrawColor(renderer, 56, 66, 86, 255);
     SDL_RenderDrawLine(renderer, button_gutter_x - 8, target_pos_box.y + 2, button_gutter_x - 8, asset_dyn_box.y + asset_dyn_box.h - 2);
     auto draw_setup_row = [&](const SDL_Rect& box,
                               std::string_view label,
                               const std::string& value,
                               SDL_Color value_color = rgba(188, 198, 214)) {
-        draw_text(renderer, ctx.body_font, label_x, box.y + 6, rgba(148, 156, 172), std::string(label));
-        draw_text(renderer, ctx.body_font, value_x, box.y + 6, value_color, value, (button_gutter_x - 16) - value_x);
+        draw_text(renderer, ctx.compact_font, label_x, box.y + 6, rgba(148, 156, 172), std::string(label));
+        draw_text(renderer, ctx.compact_font, value_x, box.y + 6, value_color, value, (button_gutter_x - 16) - value_x);
     };
     draw_setup_row(target_pos_box,
                    "Target",

@@ -203,7 +203,8 @@ RenderContext make_render_context(const ViewerState& state,
                                   const ViewerOptions& options,
                                   const GuiLayout& layout,
                                   TTF_Font* title_font,
-                                  TTF_Font* body_font) {
+                                  TTF_Font* body_font,
+                                  TTF_Font* compact_font) {
     const auto phase_title = phase_banner_label(state.snapshot.phase);
     const auto phase_note = phase_operator_note(state.snapshot.phase);
     const auto phase_color = phase_accent(state.snapshot.phase);
@@ -222,6 +223,7 @@ RenderContext make_render_context(const ViewerState& state,
         layout,
         title_font,
         body_font,
+        compact_font,
         phase_title,
         phase_note,
         phase_color,

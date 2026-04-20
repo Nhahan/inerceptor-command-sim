@@ -12,6 +12,7 @@ struct RenderContext {
     const GuiLayout& layout;
     TTF_Font* title_font;
     TTF_Font* body_font;
+    TTF_Font* compact_font;
     std::string phase_title;
     std::string phase_note;
     SDL_Color phase_color;
@@ -41,7 +42,8 @@ RenderContext make_render_context(const ViewerState& state,
                                   const ViewerOptions& options,
                                   const GuiLayout& layout,
                                   TTF_Font* title_font,
-                                  TTF_Font* body_font);
+                                  TTF_Font* body_font,
+                                  TTF_Font* compact_font);
 void render_header_panel(SDL_Renderer* renderer, const RenderContext& ctx);
 void render_map_panel(SDL_Renderer* renderer, const RenderContext& ctx);
 void render_phase_panel(SDL_Renderer* renderer, const RenderContext& ctx);

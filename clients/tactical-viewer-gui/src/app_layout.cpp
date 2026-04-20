@@ -13,19 +13,54 @@ bool rects_overlap(const SDL_Rect& lhs, const SDL_Rect& rhs) {
         && lhs.y + lhs.h > rhs.y;
 }
 
-std::vector<Button> make_live_control_buttons(const SDL_Rect& control_panel) {
-    const int row1_y = control_panel.y + 126;
-    const int row2_y = control_panel.y + 164;
+std::vector<std::string> visible_live_actions(LayoutMode mode) {
+    switch (mode) {
+    case LayoutMode::StandbySetup:
+        return {"Start"};
+    case LayoutMode::LiveTactical:
+        return {"Track", "Ready", "Engage", "Reset"};
+    case LayoutMode::ReviewTactical:
+        return {"AAR", "Reset"};
+    }
+    return {"Start"};
+}
+
+std::vector<Button> make_live_control_buttons(const SDL_Rect& control_panel, LayoutMode mode) {
     const int button_gap = 10;
+    const int button_h = 30;
+    const auto actions = visible_live_actions(mode);
+    std::vector<Button> buttons;
+    if (actions.empty()) {
+        return buttons;
+    }
+
+    if (actions.size() == 1) {
+        buttons.push_back({actions.front(), std::string(actions.front()), {control_panel.x + 12, control_panel.y + 102, control_panel.w - 24, button_h}});
+        return buttons;
+    }
+
+    if (mode == LayoutMode::ReviewTactical && actions.size() == 2) {
+        const int row_y = control_panel.y + 102;
+        const int button_w = (control_panel.w - 24 - button_gap) / 2;
+        buttons.push_back({actions[0], std::string(actions[0]), {control_panel.x + 12, row_y, button_w, button_h}});
+        buttons.push_back({actions[1], std::string(actions[1]), {control_panel.x + 12 + button_w + button_gap, row_y, button_w, button_h}});
+        return buttons;
+    }
+
+    const int row1_y = control_panel.y + 102;
+    const int row2_y = control_panel.y + 138;
     const int button_w = (control_panel.w - 24 - (button_gap * 2)) / 3;
-    return {
-        {"Start", "Start", {control_panel.x + 12, row1_y, button_w, 30}},
-        {"Track", "Track", {control_panel.x + 12 + button_w + button_gap, row1_y, button_w, 30}},
-        {"Ready", "Ready", {control_panel.x + 12 + (button_w + button_gap) * 2, row1_y, button_w, 30}},
-        {"Engage", "Engage", {control_panel.x + 12, row2_y, button_w, 30}},
-        {"Reset", "Reset", {control_panel.x + 12 + button_w + button_gap, row2_y, button_w, 30}},
-        {"AAR", "AAR", {control_panel.x + 12 + (button_w + button_gap) * 2, row2_y, button_w, 30}},
-    };
+    for (std::size_t index = 0; index < actions.size(); ++index) {
+        const int row = static_cast<int>(index / 3);
+        const int col = static_cast<int>(index % 3);
+        const int y = row == 0 ? row1_y : row2_y;
+        buttons.push_back({
+            actions[index],
+            std::string(actions[index]),
+            {control_panel.x + 12 + col * (button_w + button_gap), y, button_w, button_h},
+        });
+    }
+    return buttons;
 }
 
 std::vector<Button> make_setup_buttons(const SDL_Rect& setup_panel) {
@@ -33,7 +68,7 @@ std::vector<Button> make_setup_buttons(const SDL_Rect& setup_panel) {
     const int row2_y = setup_panel.y + 86;
     const int row3_y = setup_panel.y + 112;
     const int row4_y = setup_panel.y + 138;
-    const int button_w = 32;
+    const int button_w = 28;
     const int button_h = 18;
     const int button_gap = 4;
 
@@ -72,73 +107,82 @@ std::vector<Button> make_setup_buttons(const SDL_Rect& setup_panel) {
 
 }  // namespace
 
-GuiLayout build_layout(const ViewerOptions& options) {
+GuiLayout build_layout(const ViewerOptions& options, const ViewerState& state) {
     constexpr int margin = 24;
     constexpr int header_x = 24;
     constexpr int header_y = 18;
     constexpr int header_h = 64;
-    constexpr int gap_after_header = 36;
-    constexpr int gap_after_map = 30;
-    constexpr int gap_before_event_panel = 18;
-    constexpr int grid_width = 24;
-    constexpr int grid_height = 16;
-    constexpr int cell_px = 24;
-    constexpr int entity_panel_h = 118;
-    constexpr int right_panel_gap = 12;
-    constexpr int left_panel_w = 330;
+    constexpr int gap_after_header = 24;
+    constexpr int column_gap = 18;
+    constexpr int section_gap = 12;
+    constexpr int gap_before_event_panel = 14;
 
     GuiLayout layout;
+    layout.mode = layout_mode_for_state(state);
+    layout.show_resilience_panel = layout.mode == LayoutMode::LiveTactical;
+    layout.show_setup_panel = layout.mode == LayoutMode::StandbySetup;
     layout.header_panel = {header_x, header_y, options.width - (margin * 2), header_h};
     layout.phase_strip = {layout.header_panel.x + 12, layout.header_panel.y + 12, 330, layout.header_panel.h - 24};
     const int content_y = header_y + header_h + gap_after_header;
-    layout.map_rect = {margin, content_y, grid_width * cell_px, grid_height * cell_px};
-    layout.entity_panel = {margin, layout.map_rect.y + layout.map_rect.h + gap_after_map, layout.map_rect.w, entity_panel_h};
-    layout.panel_x = layout.map_rect.x + layout.map_rect.w + margin;
-    const int stacked_column_total_h = layout.map_rect.h + gap_after_map + layout.entity_panel.h - right_panel_gap;
-    const int panel_h = stacked_column_total_h / 2;
-    layout.phase_panel = {layout.panel_x, content_y, left_panel_w, panel_h};
-    const int right_panel_x = layout.panel_x + left_panel_w + right_panel_gap;
-    layout.decision_panel = {right_panel_x, content_y, options.width - right_panel_x - margin, panel_h};
-    layout.resilience_panel = {layout.panel_x, content_y + panel_h + right_panel_gap, left_panel_w, panel_h};
-    layout.control_panel = {right_panel_x, content_y + panel_h + right_panel_gap, options.width - right_panel_x - margin, panel_h};
-    const int upper_panel_bottom = std::max(layout.entity_panel.y + layout.entity_panel.h,
-                                            std::max(layout.resilience_panel.y + layout.resilience_panel.h,
-                                                     layout.control_panel.y + layout.control_panel.h));
-    const int bottom_panel_y = upper_panel_bottom + gap_before_event_panel;
-    const int bottom_panel_h = options.height - bottom_panel_y - margin;
-    layout.setup_panel = {right_panel_x, bottom_panel_y, layout.control_panel.w, bottom_panel_h};
-    layout.event_panel = {margin,
-                          bottom_panel_y,
-                          (layout.phase_panel.x + layout.phase_panel.w) - margin,
-                          bottom_panel_h};
-    layout.buttons = make_live_control_buttons(layout.control_panel);
-    const auto setup_buttons = make_setup_buttons(layout.setup_panel);
-    layout.buttons.insert(layout.buttons.end(), setup_buttons.begin(), setup_buttons.end());
+    const int rail_w = layout.mode == LayoutMode::StandbySetup ? 340 : 300;
+    const int event_panel_h = layout.mode == LayoutMode::ReviewTactical ? 176
+        : (layout.mode == LayoutMode::StandbySetup ? 146 : 118);
+    const int upper_h = options.height - margin - content_y - gap_before_event_panel - event_panel_h;
+    layout.content_panel = {margin, content_y, options.width - (margin * 2), upper_h + gap_before_event_panel + event_panel_h};
+    const int map_w = options.width - (margin * 2) - column_gap - rail_w;
+    layout.map_rect = {margin, content_y, map_w, upper_h};
+    layout.entity_panel = {};
+    layout.phase_panel = {};
+    layout.panel_x = layout.map_rect.x + layout.map_rect.w + column_gap;
+    layout.rail_panel = {layout.panel_x - 10, content_y, options.width - margin - (layout.panel_x - 10), layout.content_panel.h};
+    const int decision_h = layout.mode == LayoutMode::ReviewTactical ? 150 : 144;
+    const int control_h = layout.mode == LayoutMode::ReviewTactical ? 154
+        : (layout.mode == LayoutMode::LiveTactical ? 180 : 140);
+    layout.decision_panel = {layout.panel_x, content_y, rail_w, decision_h};
+    layout.control_panel = {layout.panel_x, layout.decision_panel.y + layout.decision_panel.h + section_gap, rail_w, control_h};
 
-    const std::array<SDL_Rect, 8> panels {
-        layout.header_panel,
-        layout.map_rect,
-        layout.entity_panel,
-        layout.phase_panel,
-        layout.decision_panel,
-        layout.resilience_panel,
-        layout.control_panel,
-        layout.setup_panel,
+    const int lower_panel_y = layout.control_panel.y + layout.control_panel.h + section_gap;
+    const int lower_panel_h = std::max(0, (content_y + layout.content_panel.h) - lower_panel_y);
+    if (layout.show_resilience_panel) {
+        layout.resilience_panel = {layout.panel_x, lower_panel_y, rail_w, std::min(lower_panel_h, 148)};
+    } else {
+        layout.resilience_panel = {};
+    }
+    if (layout.show_setup_panel) {
+        layout.setup_panel = {layout.panel_x, lower_panel_y, rail_w, lower_panel_h};
+    } else {
+        layout.setup_panel = {};
+    }
+    layout.event_panel = {margin,
+                          content_y + upper_h + gap_before_event_panel,
+                          map_w,
+                          event_panel_h};
+    layout.buttons = make_live_control_buttons(layout.control_panel, layout.mode);
+    if (layout.show_setup_panel) {
+        const auto setup_buttons = make_setup_buttons(layout.setup_panel);
+        layout.buttons.insert(layout.buttons.end(), setup_buttons.begin(), setup_buttons.end());
+    }
+
+    std::vector<SDL_Rect> panels;
+    panels.reserve(7);
+    auto append_visible = [&](const SDL_Rect& rect) {
+        if (rect.w > 0 && rect.h > 0) {
+            panels.push_back(rect);
+        }
     };
+    append_visible(layout.header_panel);
+    append_visible(layout.map_rect);
+    append_visible(layout.decision_panel);
+    append_visible(layout.control_panel);
+    append_visible(layout.resilience_panel);
+    append_visible(layout.setup_panel);
+    append_visible(layout.event_panel);
     for (std::size_t i = 0; i < panels.size(); ++i) {
         for (std::size_t j = i + 1; j < panels.size(); ++j) {
             if (rects_overlap(panels[i], panels[j])) {
                 throw std::runtime_error("gui layout overlap detected");
             }
         }
-    }
-    if (rects_overlap(layout.entity_panel, layout.event_panel)
-        || rects_overlap(layout.phase_panel, layout.event_panel)
-        || rects_overlap(layout.decision_panel, layout.event_panel)
-        || rects_overlap(layout.resilience_panel, layout.event_panel)
-        || rects_overlap(layout.control_panel, layout.event_panel)
-        || rects_overlap(layout.setup_panel, layout.event_panel)) {
-        throw std::runtime_error("gui event panel overlaps another panel");
     }
     for (std::size_t i = 0; i < layout.buttons.size(); ++i) {
         const auto& rect = layout.buttons[i].rect;

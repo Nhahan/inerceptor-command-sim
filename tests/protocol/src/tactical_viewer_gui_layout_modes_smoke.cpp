@@ -1,9 +1,9 @@
 #include <cassert>
 #include <chrono>
-#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "icss/support/minijson.hpp"
 #include "tests/support/process_smoke.hpp"
@@ -20,9 +20,7 @@ namespace {
 #if !defined(_WIN32)
 using icss::testsupport::process::ChildProcess;
 
-ChildProcess spawn_gui_viewer(const std::filesystem::path& dump_path,
-                              std::uint16_t udp_port,
-                              std::uint16_t tcp_port) {
+ChildProcess spawn_gui_viewer(const std::filesystem::path& dump_path) {
     int pipe_fds[2] {};
     assert(::pipe(pipe_fds) == 0);
     const auto pid = ::fork();
@@ -36,17 +34,14 @@ ChildProcess spawn_gui_viewer(const std::filesystem::path& dump_path,
         ::setenv("SDL_VIDEODRIVER", "dummy", 1);
 
         const std::string exe = (std::filesystem::path{ICSS_REPO_ROOT} / "build/icss_tactical_display_gui").string();
-        const std::string udp = std::to_string(udp_port);
-        const std::string tcp = std::to_string(tcp_port);
         std::vector<std::string> argv_storage {
             exe,
             "--host", "127.0.0.1",
-            "--udp-port", udp,
-            "--tcp-port", tcp,
+            "--udp-port", "4001",
+            "--tcp-port", "4000",
             "--headless",
             "--hidden",
-            "--auto-controls", "Start,Track,Ready,Engage,AAR",
-            "--duration-ms", "1800",
+            "--duration-ms", "250",
             "--heartbeat-interval-ms", "100",
             "--dump-state", dump_path.string(),
         };
@@ -84,17 +79,9 @@ int main() {
     namespace fs = std::filesystem;
     namespace process = icss::testsupport::process;
 
-    const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_gui_aar_");
-    auto server = process::spawn_server_process({
-        .repo_root = temp_root,
-        .tcp_frame_format = "json",
-        .run_forever = true,
-        .tick_sleep_ms = 20,
-    });
-    const auto startup = process::wait_for_startup(server);
-
-    const fs::path dump_path = temp_root / "viewer-aar.json";
-    auto viewer = spawn_gui_viewer(dump_path, startup.udp_port, startup.tcp_port);
+    const fs::path temp_root = icss::testsupport::make_temp_configured_repo("icss_gui_layout_modes_");
+    const fs::path dump_path = temp_root / "viewer-layout-mode.json";
+    auto viewer = spawn_gui_viewer(dump_path);
 
     const auto [viewer_exited, viewer_status] =
         process::wait_for_exit(viewer.pid, std::chrono::steady_clock::now() + std::chrono::seconds(5));
@@ -106,30 +93,13 @@ int main() {
     const auto dump_json = icss::testsupport::minijson::parse(read_text(dump_path));
     assert(dump_json.is_object());
     const auto& object = dump_json.as_object();
-    assert(icss::testsupport::minijson::require_field(object, "last_control_label").as_string() == "Review");
-    assert(icss::testsupport::minijson::require_field(object, "last_control_message").as_string() == "post-engagement review loaded");
-    assert(icss::testsupport::minijson::require_field(object, "layout_mode").as_string() == "review_tactical");
-    assert(!icss::testsupport::minijson::require_field(object, "setup_visible").as_bool());
+    assert(icss::testsupport::minijson::require_field(object, "phase").as_string() == "standby");
+    assert(icss::testsupport::minijson::require_field(object, "layout_mode").as_string() == "standby_setup");
+    assert(icss::testsupport::minijson::require_field(object, "setup_visible").as_bool());
     assert(!icss::testsupport::minijson::require_field(object, "link_panel_visible").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "phase").as_string() == "archived");
-    assert(icss::testsupport::minijson::require_field(object, "aar_available").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "aar_loaded").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "aar_visible").as_bool());
-    assert(icss::testsupport::minijson::require_field(object, "recommended_control").as_string() == "Reset");
-    assert(icss::testsupport::minijson::require_field(object, "aar_total_events").as_int() >= 1);
-    assert(icss::testsupport::minijson::require_field(object, "aar_cursor_index").is_int());
+    assert(rect_area(icss::testsupport::minijson::require_field(object, "setup_panel")) > 0);
     assert(rect_area(icss::testsupport::minijson::require_field(object, "map_panel"))
-        > rect_area(icss::testsupport::minijson::require_field(object, "summary_panel")));
-    assert(icss::testsupport::minijson::require_field(object, "aar_assessment_code").as_string() == "intercept_success");
-    assert(!icss::testsupport::minijson::require_field(object, "aar_event_type").as_string().empty());
-    assert(!icss::testsupport::minijson::require_field(object, "aar_event_summary").as_string().empty());
-
-    ::kill(server.pid, SIGTERM);
-    const auto [server_exited, server_status] =
-        process::wait_for_exit(server.pid, std::chrono::steady_clock::now() + std::chrono::seconds(5));
-    assert(server_exited);
-    assert(WIFEXITED(server_status));
-    server.pid = -1;
+        > rect_area(icss::testsupport::minijson::require_field(object, "setup_panel")));
 
     fs::remove_all(temp_root);
 #endif

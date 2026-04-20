@@ -9,6 +9,13 @@
 namespace icss::viewer_gui {
 namespace {
 
+std::uint64_t wall_time_ms_now() {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count());
+}
+
 void initialize_preview_state(ViewerState& state, const ViewerOptions& options) {
     state.planned_scenario = default_viewer_scenario(options.repo_root);
     state.snapshot.target.id = "target-alpha";
@@ -52,7 +59,8 @@ int main(int argc, char** argv) {
 
         TTF_Font* title_font = TTF_OpenFont(options.font_path.string().c_str(), 20);
         TTF_Font* body_font = TTF_OpenFont(options.font_path.string().c_str(), 15);
-        if (!title_font || !body_font) {
+        TTF_Font* compact_font = TTF_OpenFont(options.font_path.string().c_str(), 13);
+        if (!title_font || !body_font || !compact_font) {
             throw std::runtime_error(std::string("failed to open font: ") + TTF_GetError());
         }
 
@@ -81,7 +89,7 @@ int main(int argc, char** argv) {
                 if (event.type == SDL_MOUSEBUTTONDOWN && !options.headless) {
                     const int x = event.button.x;
                     const int y = event.button.y;
-                    for (const auto& button : build_layout(options).buttons) {
+                    for (const auto& button : build_layout(options, state).buttons) {
                         if (x >= button.rect.x && x < button.rect.x + button.rect.w
                             && y >= button.rect.y && y < button.rect.y + button.rect.h) {
 #if !defined(_WIN32)
@@ -95,7 +103,7 @@ int main(int argc, char** argv) {
                     int mouse_x = 0;
                     int mouse_y = 0;
                     SDL_GetMouseState(&mouse_x, &mouse_y);
-                    const auto layout = build_layout(options);
+                    const auto layout = build_layout(options, state);
                     const auto& panel = layout.event_panel;
                     if (mouse_x >= panel.x && mouse_x < panel.x + panel.w
                         && mouse_y >= panel.y && mouse_y < panel.y + panel.h) {
@@ -132,6 +140,7 @@ int main(int argc, char** argv) {
             }
             const auto now = SDL_GetTicks64();
             state.now_ms = now;
+            state.now_wall_time_ms = wall_time_ms_now();
             if (options.duration_ms > 0 && now - start_ticks >= options.duration_ms) {
                 running = false;
             }
@@ -168,7 +177,7 @@ int main(int argc, char** argv) {
                 }
             }
 #endif
-            render_gui(renderer, title_font, body_font, state, options);
+            render_gui(renderer, title_font, body_font, compact_font, state, options);
             SDL_Delay(16);
         }
 
@@ -183,6 +192,7 @@ int main(int argc, char** argv) {
 
         TTF_CloseFont(title_font);
         TTF_CloseFont(body_font);
+        TTF_CloseFont(compact_font);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         TTF_Quit();

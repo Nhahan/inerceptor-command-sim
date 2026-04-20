@@ -29,16 +29,32 @@ void write_dump_state(const std::filesystem::path& path, const ViewerState& stat
         std::filesystem::create_directories(parent);
     }
     std::ofstream out(path);
-    const auto transform = make_viewport_transform(build_layout(options).map_rect, state, options);
+    const auto layout = build_layout(options, state);
+    const auto transform = make_viewport_transform(layout.map_rect, state, options);
+    const auto write_rect = [&](std::string_view label, const SDL_Rect& rect) {
+        out << "  \"" << label << "\": {"
+            << "\"x\": " << rect.x << ", "
+            << "\"y\": " << rect.y << ", "
+            << "\"w\": " << rect.w << ", "
+            << "\"h\": " << rect.h << "},\n";
+    };
     out << "{\n";
     out << "  \"schema_version\": \"icss-gui-viewer-state-v1\",\n";
+    out << "  \"layout_mode\": \"" << layout_mode_name(layout.mode) << "\",\n";
+    out << "  \"setup_visible\": " << (layout.show_setup_panel ? "true" : "false") << ",\n";
+    out << "  \"link_panel_visible\": " << (layout.show_resilience_panel ? "true" : "false") << ",\n";
     out << "  \"received_snapshot\": " << (state.received_snapshot ? "true" : "false") << ",\n";
     out << "  \"received_telemetry\": " << (state.received_telemetry ? "true" : "false") << ",\n";
     out << "  \"now_ms\": " << state.now_ms << ",\n";
+    out << "  \"now_wall_time_ms\": " << state.now_wall_time_ms << ",\n";
     out << "  \"last_datagram_received_ms\": " << state.last_datagram_received_ms << ",\n";
-    out << "  \"picture_age_ms\": " << ((state.last_datagram_received_ms > 0 && state.now_ms >= state.last_datagram_received_ms)
-        ? (state.now_ms - state.last_datagram_received_ms)
+    out << "  \"last_snapshot_wall_time_ms\": " << state.last_snapshot_wall_time_ms << ",\n";
+    out << "  \"picture_age_ms\": " << ((state.last_snapshot_wall_time_ms > 0 && state.now_wall_time_ms >= state.last_snapshot_wall_time_ms)
+        ? (state.now_wall_time_ms - state.last_snapshot_wall_time_ms)
         : 0) << ",\n";
+    out << "  \"link_delay_raw_ms\": " << state.link_delay_raw_ms << ",\n";
+    out << "  \"link_delay_ms\": " << state.link_delay_ms << ",\n";
+    out << "  \"has_link_delay_sample\": " << (state.has_link_delay_sample ? "true" : "false") << ",\n";
     out << "  \"snapshot_sequence\": " << state.snapshot.header.snapshot_sequence << ",\n";
     out << "  \"tick\": " << state.snapshot.telemetry.tick << ",\n";
     out << "  \"phase\": \"" << icss::core::to_string(state.snapshot.phase) << "\",\n";
@@ -74,6 +90,11 @@ void write_dump_state(const std::filesystem::path& path, const ViewerState& stat
     out << "  \"camera_visible_min_y\": " << transform.visible_min_y << ",\n";
     out << "  \"camera_visible_max_x\": " << transform.visible_max_x << ",\n";
     out << "  \"camera_visible_max_y\": " << transform.visible_max_y << ",\n";
+    write_rect("map_panel", layout.map_rect);
+    write_rect("summary_panel", layout.decision_panel);
+    write_rect("control_panel", layout.control_panel);
+    write_rect("event_panel", layout.event_panel);
+    write_rect("setup_panel", layout.setup_panel);
     out << "  \"aar_available\": " << (aar_available(state) ? "true" : "false") << ",\n";
     out << "  \"aar_loaded\": " << (state.aar.loaded ? "true" : "false") << ",\n";
     out << "  \"aar_visible\": " << (state.aar.visible ? "true" : "false") << ",\n";
@@ -148,6 +169,7 @@ void write_dump_golden_state(const std::filesystem::path& path, const ViewerStat
     std::ofstream out(path);
     out << "{\n";
     out << "  \"schema_version\": \"icss-gui-viewer-golden-state-v1\",\n";
+    out << "  \"layout_mode\": \"" << layout_mode_name(layout_mode_for_state(state)) << "\",\n";
     out << "  \"phase\": \"" << icss::core::to_string(state.snapshot.phase) << "\",\n";
     out << "  \"phase_banner\": \"" << escape_json(phase_banner_label(state.snapshot.phase)) << "\",\n";
     out << "  \"assessment_code\": \"" << icss::core::to_string(state.snapshot.assessment.code) << "\",\n";

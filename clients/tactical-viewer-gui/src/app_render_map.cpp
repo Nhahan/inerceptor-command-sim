@@ -236,6 +236,56 @@ void draw_launch_origin_marker(SDL_Renderer* renderer,
     draw_text(renderer, ctx.body_font, label_x, label_y, rgba(120, 190, 255), "ORIGIN");
 }
 
+void draw_map_summary_overlay(SDL_Renderer* renderer,
+                              const RenderContext& ctx,
+                              const SDL_Rect& map_rect) {
+    const bool review_mode = ctx.layout.mode == LayoutMode::ReviewTactical;
+    const SDL_Rect overlay {
+        map_rect.x + 16,
+        map_rect.y + 14,
+        review_mode ? 338 : 314,
+        review_mode ? 94 : 76,
+    };
+    fill_panel(renderer, overlay, rgba(10, 14, 20), ctx.phase_color);
+    draw_text(renderer,
+              ctx.title_font,
+              overlay.x + 12,
+              overlay.y + 10,
+              review_mode ? rgba(255, 214, 102) : ctx.phase_color,
+              review_mode ? "Engagement Review" : ctx.phase_title);
+    draw_text(renderer,
+              ctx.body_font,
+              overlay.x + 12,
+              overlay.y + 36,
+              rgba(236, 239, 244),
+              "Assessment  " + uppercase_words(icss::core::to_string(ctx.state.snapshot.assessment.code)),
+              overlay.w - 24);
+
+    std::string detail_line;
+    if (review_mode) {
+        detail_line = "Profile  ";
+        detail_line += ctx.state.effective_track_active ? "TRACKED" : "UNGUIDED";
+        detail_line += "  |  ";
+        detail_line += ctx.state.aar.loaded
+            ? ("Review " + std::to_string(ctx.state.aar.cursor_index) + "/" + std::to_string(ctx.state.aar.total_events))
+            : std::string("Review available");
+    } else {
+        detail_line = std::string("Track  ")
+            + (ctx.state.snapshot.track.active ? "FILE" : "NOT HELD")
+            + "  |  TTI  "
+            + (ctx.state.snapshot.predicted_intercept_valid
+                ? (format_fixed_1(ctx.state.snapshot.time_to_intercept_s) + " s")
+                : std::string("pending"));
+    }
+    draw_text(renderer,
+              ctx.body_font,
+              overlay.x + 12,
+              overlay.y + 56,
+              rgba(188, 198, 214),
+              detail_line,
+              overlay.w - 24);
+}
+
 }  // namespace
 
 void render_map_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
@@ -243,8 +293,8 @@ void render_map_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
     const auto transform = make_viewport_transform(map_rect, ctx.state, ctx.options);
     const auto grid_step_x = major_grid_step(transform.visible_max_x - transform.visible_min_x);
     const auto grid_step_y = major_grid_step(transform.visible_max_y - transform.visible_min_y);
-    fill_panel(renderer, map_rect, rgba(36, 41, 52), rgba(74, 80, 96));
-    SDL_SetRenderDrawColor(renderer, 74, 80, 96, 110);
+    fill_panel(renderer, map_rect, rgba(34, 39, 50), rgba(86, 96, 118));
+    SDL_SetRenderDrawColor(renderer, 82, 88, 108, 110);
     const int x_start = static_cast<int>(std::ceil(transform.visible_min_x / static_cast<float>(grid_step_x))) * grid_step_x;
     const int x_end = static_cast<int>(std::floor(transform.visible_max_x));
     for (int x = x_start; x <= x_end; x += grid_step_x) {
@@ -257,15 +307,6 @@ void render_map_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
         const int py = static_cast<int>(world_to_screen(transform, {0.0F, static_cast<float>(y)}).y);
         SDL_RenderDrawLine(renderer, map_rect.x, py, map_rect.x + map_rect.w, py);
     }
-    for (int x = x_start; x <= x_end; x += grid_step_x) {
-        const int px = static_cast<int>(world_to_screen(transform, {static_cast<float>(x), 0.0F}).x);
-        draw_text(renderer, ctx.body_font, px + 2, map_rect.y + map_rect.h + 6, rgba(140, 149, 168), std::to_string(x));
-    }
-    for (int y = y_start; y <= y_end; y += grid_step_y) {
-        const int py = static_cast<int>(world_to_screen(transform, {0.0F, static_cast<float>(y)}).y);
-        draw_text(renderer, ctx.body_font, map_rect.x - 24, py + 2, rgba(140, 149, 168), std::to_string(y));
-    }
-
     draw_launch_origin_marker(renderer, ctx, transform, map_rect);
     draw_history(renderer, transform, ctx.state.target_history, rgba(244, 67, 54, 110));
     draw_history(renderer, transform, ctx.state.interceptor_history, rgba(66, 165, 245, 110));
@@ -331,6 +372,7 @@ void render_map_panel(SDL_Renderer* renderer, const RenderContext& ctx) {
 
     draw_entity(renderer, ctx, transform, ctx.state.snapshot.target, rgba(244, 67, 54));
     draw_entity(renderer, ctx, transform, ctx.state.snapshot.interceptor, rgba(66, 165, 245));
+    draw_map_summary_overlay(renderer, ctx, map_rect);
 }
 
 }  // namespace icss::viewer_gui

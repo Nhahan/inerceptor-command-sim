@@ -90,6 +90,11 @@ std::string read_text(const std::filesystem::path& path) {
     return text;
 }
 
+int rect_area(const icss::testsupport::minijson::Value& value) {
+    const auto& object = value.as_object();
+    return object.at("w").as_int() * object.at("h").as_int();
+}
+
 }  // namespace
 
 int main() {
@@ -129,8 +134,12 @@ int main() {
     assert(dump_json.is_object());
     const auto& object = dump_json.as_object();
     assert(icss::testsupport::minijson::require_field(object, "schema_version").as_string() == "icss-gui-viewer-state-v1");
+    assert(icss::testsupport::minijson::require_field(object, "layout_mode").as_string() == "live_tactical");
+    assert(!icss::testsupport::minijson::require_field(object, "setup_visible").as_bool());
+    assert(icss::testsupport::minijson::require_field(object, "link_panel_visible").as_bool());
     assert(icss::testsupport::minijson::require_field(object, "received_snapshot").as_bool());
     assert(icss::testsupport::minijson::require_field(object, "received_telemetry").as_bool());
+    assert(icss::testsupport::minijson::require_field(object, "now_wall_time_ms").is_int());
     assert(icss::testsupport::minijson::require_field(object, "snapshot_sequence").as_int() >= 1);
     assert(icss::testsupport::minijson::require_field(object, "tick").is_int());
     assert(icss::testsupport::minijson::require_field(object, "phase").as_string() == "detecting");
@@ -141,6 +150,11 @@ int main() {
     assert(!icss::testsupport::minijson::require_field(object, "resilience_summary").as_string().empty());
     assert(icss::testsupport::minijson::require_field(object, "assessment_code").as_string() == "pending");
     assert(icss::testsupport::minijson::require_field(object, "heartbeat_count").is_int());
+    assert(icss::testsupport::minijson::require_field(object, "has_link_delay_sample").as_bool());
+    assert(icss::testsupport::minijson::require_field(object, "link_delay_raw_ms").as_int() >= 0);
+    assert(icss::testsupport::minijson::require_field(object, "link_delay_ms").as_int() >= 0);
+    assert(icss::testsupport::minijson::require_field(object, "last_snapshot_wall_time_ms").as_int() > 0);
+    assert(icss::testsupport::minijson::require_field(object, "picture_age_ms").as_int() >= 0);
     assert(icss::testsupport::minijson::require_field(object, "last_server_event_tick").is_int());
     assert(icss::testsupport::minijson::require_field(object, "last_server_event_type").as_string() == "session_started");
     assert(icss::testsupport::minijson::require_field(object, "authoritative_headline").as_string().find("SESSION STARTED") != std::string::npos);
@@ -161,6 +175,10 @@ int main() {
     assert(icss::testsupport::minijson::require_field(object, "camera_visible_max_x").is_number());
     assert(icss::testsupport::minijson::require_field(object, "camera_visible_min_y").is_number());
     assert(icss::testsupport::minijson::require_field(object, "camera_visible_max_y").is_number());
+    assert(rect_area(icss::testsupport::minijson::require_field(object, "map_panel"))
+        > rect_area(icss::testsupport::minijson::require_field(object, "control_panel")));
+    assert(rect_area(icss::testsupport::minijson::require_field(object, "map_panel"))
+        > rect_area(icss::testsupport::minijson::require_field(object, "summary_panel")));
     assert(icss::testsupport::minijson::require_field(object, "last_control_label").as_string() == "Start");
     assert(icss::testsupport::minijson::require_field(object, "last_control_message").as_string().find("scenario started") != std::string::npos);
     assert(icss::testsupport::minijson::require_field(object, "target_active").as_bool());
